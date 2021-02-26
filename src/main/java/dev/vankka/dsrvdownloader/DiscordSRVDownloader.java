@@ -83,7 +83,7 @@ public class DiscordSRVDownloader {
 
                 String event = ctx.header("X-GitHub-Event");
                 if (event == null) {
-                    ctx.status(300);
+                    ctx.status(400);
                     return;
                 }
 
