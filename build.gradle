@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+group 'dev.vankka'
+version '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.json:json:20201115'
+    implementation 'com.sparkjava:spark-core:2.9.3'
+}
+
+jar {
+    archiveFileName = 'DiscordSRVDownloader.jar'
+    from configurations.runtimeClasspath.collect {
+        it.getName().endsWith('.jar') ? zipTree(it) : it
+    }
+
+    manifest {
+        attributes(
+                'Main-Class': 'dev.vankka.dsrvdownloader.DiscordSRVDownloader'
+        )
+    }
+}
