@@ -99,9 +99,7 @@ public class DiscordSRVDownloader {
                             System.out.println("New snapshot has via check suite success: " + snapshotHash);
                         } else {
                             System.out.println("Check suite gave a non-success completion: " + conclusion);
-                            JSONObject webhookJson = new JSONObject();
-                            webhookJson.put("content", "Check suite completed with non-success status, commit: `" + hash + "`, conclusion: `" + conclusion + "`");
-                            postRequest(discordWebhookUrl, webhookJson);
+                            postToWebhook(discordWebhookUrl, "Check suite completed with non-success status, commit: `" + hash + "`, conclusion: `" + conclusion + "`");
                         }
                     }
                 } else if (event.equals("release")) {
@@ -144,7 +142,6 @@ public class DiscordSRVDownloader {
                 ctx.header("content-disposition", "attachment; filename=\"" + file.getName() + "\"");
                 try (InputStream inputStream = new FileInputStream(file)) {
                     try (OutputStream outputStream = ctx.res.getOutputStream()) {
-
                         IOUtils.copy(inputStream, outputStream);
                     }
                 }
@@ -230,12 +227,15 @@ public class DiscordSRVDownloader {
             } else {
                 boolean success = getToFile(releaseUrl, file);
                 if (success) {
+                    boolean webhook = releaseFile != null; // don't post this if we're getting it after a restart
                     releaseFile = file;
 
-                    JSONObject jsonObject = new JSONObject();
-                    jsonObject.put("content", "Release `" + releaseVersion + "` is now available");
-                    postRequest(discordWebhookUrl, jsonObject);
+                    if (webhook) {
+                        postToWebhook(discordWebhookUrl, "Release `" + releaseVersion + "` is now available");
+                    }
                 } else {
+                    postToWebhook(discordWebhookUrl, "Failed to download release from Github");
+
                     try {
                         Files.delete(file.toPath());
                     } catch (IOException e) {
@@ -285,16 +285,16 @@ public class DiscordSRVDownloader {
 
             boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST", file);
             if (success) {
-                boolean webhook = snapshotFile != null;
+                boolean webhook = snapshotFile != null; // don't send if we're getting this after a restart
                 snapshotFile = file;
                 previousSnapshotHash = snapshotHash;
 
                 if (webhook) {
-                    JSONObject jsonObject = new JSONObject();
-                    jsonObject.put("content", "Snapshot for commit `" + snapshotHash + "` is now available");
-                    postRequest(discordWebhookUrl, jsonObject);
+                    postToWebhook(discordWebhookUrl, "Snapshot for commit `" + snapshotHash + "` is now available");
                 }
             } else {
+                postToWebhook(discordWebhookUrl, "Unable to download snapshot from nexus");
+
                 try {
                     Files.delete(file.toPath());
                 } catch (IOException e) {
@@ -369,11 +369,15 @@ public class DiscordSRVDownloader {
         }
     }
 
-    private void postRequest(String plainUrl, JSONObject body) {
+    private void postToWebhook(String plainUrl, String content) {
         try {
             if (plainUrl == null || plainUrl.isEmpty()) {
                 return;
             }
+
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("content", content);
+
             URL url = new URL(plainUrl);
 
             HttpsURLConnection httpsURLConnection = (HttpsURLConnection) url.openConnection();
@@ -382,7 +386,7 @@ public class DiscordSRVDownloader {
             httpsURLConnection.setDoOutput(true);
             httpsURLConnection.setRequestMethod("POST");
 
-            try (StringReader stringReader = new StringReader(body.toString())) {
+            try (StringReader stringReader = new StringReader(jsonObject.toString())) {
                 try (OutputStreamWriter outputStreamWriter = new OutputStreamWriter(httpsURLConnection.getOutputStream())) {
                     IOUtils.copy(stringReader, outputStreamWriter);
                 }
