@@ -371,6 +371,9 @@ public class DiscordSRVDownloader {
 
     private void postRequest(String plainUrl, JSONObject body) {
         try {
+            if (plainUrl == null || plainUrl.isEmpty()) {
+                return;
+            }
             URL url = new URL(plainUrl);
 
             HttpsURLConnection httpsURLConnection = (HttpsURLConnection) url.openConnection();
