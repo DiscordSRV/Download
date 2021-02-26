@@ -11,7 +11,8 @@ repositories {
 
 dependencies {
     implementation 'org.json:json:20201115'
-    implementation 'com.sparkjava:spark-core:2.9.3'
+    implementation 'commons-io:commons-io:2.8.0'
+    implementation 'io.javalin:javalin:3.13.3'
 }
 
 jar {

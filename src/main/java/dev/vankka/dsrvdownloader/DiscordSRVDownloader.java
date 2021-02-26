@@ -1,8 +1,9 @@
 package dev.vankka.dsrvdownloader;
 
+import io.javalin.Javalin;
+import org.apache.commons.io.IOUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import spark.utils.IOUtils;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -14,11 +15,8 @@ import java.nio.file.Files;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-
-import static spark.Spark.*;
 
 public class DiscordSRVDownloader {
 
@@ -59,7 +57,7 @@ public class DiscordSRVDownloader {
             port = Integer.parseInt(args[1]);
         }
 
-        port(port);
+        Javalin javalin = Javalin.create().start(port);
 
         String webhookUrl = System.getenv("DISCORD_WEBHOOK_URL");
         if ((webhookUrl == null || !webhookUrl.isEmpty()) && args.length > 2) {
@@ -70,22 +68,26 @@ public class DiscordSRVDownloader {
 
         String finalSecret = secret;
 
-        post("/github-webhook", ((request, response) -> {
+        javalin.post("/github-webhook", ctx -> {
             try {
-                byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), request.body().getBytes(StandardCharsets.UTF_8));
+                byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), ctx.body().getBytes(StandardCharsets.UTF_8));
                 if (bytes == null) {
-                    response.status(401);
-                    return "";
+                    ctx.status(401);
+                    return;
                 }
                 String signature = "sha256=" + hex(bytes);
-                if (!signature.equals(request.headers("X-Hub-Signature-256"))) {
-                    response.status(401);
-                    return "";
+                if (!signature.equals(ctx.header("X-Hub-Signature-256"))) {
+                    ctx.status(401);
+                    return;
                 }
 
-                String event = request.headers("X-GitHub-Event");
+                String event = ctx.header("X-GitHub-Event");
+                if (event == null) {
+                    ctx.status(300);
+                    return;
+                }
 
-                JSONObject jsonObject = new JSONObject(request.body());
+                JSONObject jsonObject = new JSONObject(ctx.body());
                 if (event.equals("check_suite")) {
                     JSONObject checkSuite = jsonObject.getJSONObject("check_suite");
                     if (checkSuite.getString("status").equals("completed") && checkSuite.getString("head_branch").equals("develop")) {
@@ -113,21 +115,21 @@ public class DiscordSRVDownloader {
                         }
                     }
                 } else if (!event.equals("ping")) {
-                    response.status(400);
-                    return "Only check_suite, release and ping are accepted";
+                    ctx.status(400);
+                    ctx.result("Only check_suite, release and ping are accepted");
+                    return;
                 }
 
-                response.status(204);
-                return "";
+                ctx.status(204);
             } catch (Throwable t) {
                 t.printStackTrace();
                 throw t;
             }
-        }));
+        });
 
-        get("/:type", (request, response) -> {
+        javalin.get("/:type", ctx -> {
             File file;
-            switch (request.params("type").toLowerCase()) {
+            switch (ctx.pathParam("type").toLowerCase()) {
                 case "release":
                     file = releaseFile;
                     break;
@@ -135,20 +137,20 @@ public class DiscordSRVDownloader {
                     file = snapshotFile;
                     break;
                 default:
-                    return null;
+                    ctx.status(404);
+                    return;
             }
             if (file != null && file.exists()) {
-                response.header("content-disposition", "attachment; filename=\"" + file.getName() + "\"");
+                ctx.header("content-disposition", "attachment; filename=\"" + file.getName() + "\"");
                 try (InputStream inputStream = new FileInputStream(file)) {
-                    try (OutputStream outputStream = response.raw().getOutputStream()) {
+                    try (OutputStream outputStream = ctx.res.getOutputStream()) {
+
                         IOUtils.copy(inputStream, outputStream);
                     }
                 }
             } else {
-                response.status(503); // Service unavailable while we try get the file
-                return "";
+                ctx.status(503); // Service unavailable while we try get the file
             }
-            return response.raw();
         });
 
         new Timer("DiscordSRVDownloader BackgroundWorker").scheduleAtFixedRate(new TimerTask() {
@@ -331,7 +333,7 @@ public class DiscordSRVDownloader {
 
             try (StringWriter stringWriter = new StringWriter()) {
                 try (InputStream inputStream = httpsURLConnection.getInputStream()) {
-                    IOUtils.copy(inputStream, stringWriter);
+                    IOUtils.copy(inputStream, stringWriter, StandardCharsets.UTF_8);
                 }
                 return stringWriter.toString();
             }
