@@ -18,12 +18,12 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-public class DiscordSRVDownloader {
+public class Downloader {
 
     private static final SimpleDateFormat RFC822_FORMATTER = new SimpleDateFormat("E, d MMM yyyy HH:mm:ss 'GMT'");
 
     public static void main(String[] args) {
-        new DiscordSRVDownloader(args);
+        new Downloader(args);
         RFC822_FORMATTER.setTimeZone(TimeZone.getTimeZone("GMT"));
     }
 
@@ -39,7 +39,7 @@ public class DiscordSRVDownloader {
 
     private final String discordWebhookUrl;
 
-    public DiscordSRVDownloader(String[] args) {
+    public Downloader(String[] args) {
         String secret = System.getenv("GITHUB_WEBHOOK_SECRET");
         if (secret == null || secret.isEmpty()) {
             if (args.length < 1) {
