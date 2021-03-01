@@ -1,4 +1,4 @@
-FROM gradle:jdk11-openj9 AS build
+FROM gradle:jdk11 AS build
 ADD . /build
 WORKDIR /build
 RUN gradle build
