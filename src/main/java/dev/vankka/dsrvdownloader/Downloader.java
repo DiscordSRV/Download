@@ -119,6 +119,8 @@ public class Downloader {
                     return;
                 }
 
+                readyFiles();
+
                 ctx.status(204);
             } catch (Throwable t) {
                 t.printStackTrace();
@@ -152,12 +154,7 @@ public class Downloader {
             }
         });
 
-        new Timer("DiscordSRVDownloader BackgroundWorker").scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                loop();
-            }
-        }, 0, TimeUnit.SECONDS.toMillis(5));
+        readyFiles();
     }
 
     private byte[] hmac256(byte[] secretKey, byte[] message) {
@@ -188,7 +185,7 @@ public class Downloader {
         }
     }
 
-    private void loop() {
+    private void readyFiles() {
         long currentTime = System.currentTimeMillis();
 
         File storage = new File("storage");
