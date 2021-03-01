@@ -273,7 +273,6 @@ public class Downloader {
 
         if (!String.valueOf(previousSnapshotHash).equals(snapshotHash)) {
             String snapshotFileName = "DiscordSRV-Build-" + snapshotBuild + "-" + snapshotHash.substring(0, 7) + ".jar";
-            System.out.println("Getting snapshot artifact: " + snapshotFileName);
 
             File file = new File(storage, snapshotFileName);
             if (file.exists()) {
@@ -282,6 +281,7 @@ public class Downloader {
                 return;
             }
 
+            System.out.println("Getting snapshot artifact: " + snapshotFileName);
             boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST", file);
             if (success) {
                 boolean webhook = snapshotFile != null; // don't send if we're getting this after a restart
