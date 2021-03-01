@@ -143,7 +143,8 @@ public class Downloader {
                     return;
             }
             if (file != null && file.exists()) {
-                ctx.header("content-disposition", "attachment; filename=\"" + file.getName() + "\"");
+                ctx.header("Content-Disposition", "attachment; filename=\"" + file.getName() + "\"");
+                ctx.header("Content-Type", "application/java-archive");
                 try (InputStream inputStream = new FileInputStream(file)) {
                     try (OutputStream outputStream = ctx.res.getOutputStream()) {
                         IOUtils.copy(inputStream, outputStream);
