@@ -5,5 +5,5 @@ RUN gradle build
 
 FROM openjdk:11
 WORKDIR /data
-COPY --from=build /build/build/libs/DiscordSRVDownloader.jar /data
-CMD ["java", "-jar", "DiscordSRVDownloader.jar"]
+COPY --from=build /build/build/libs/DiscordSRVDownloader.jar /
+CMD ["java", "-jar", "/DiscordSRVDownloader.jar"]
