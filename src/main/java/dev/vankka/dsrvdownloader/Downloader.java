@@ -57,7 +57,7 @@ public class Downloader {
             port = Integer.parseInt(args[1]);
         }
 
-        Javalin javalin = Javalin.create().start(port);
+        Javalin app = Javalin.create().start(port);
 
         String webhookUrl = System.getenv("DISCORD_WEBHOOK_URL");
         if ((webhookUrl == null || !webhookUrl.isEmpty()) && args.length > 2) {
@@ -68,7 +68,7 @@ public class Downloader {
 
         String finalSecret = secret;
 
-        javalin.post("/github-webhook", ctx -> {
+        app.post("/github-webhook", ctx -> {
             try {
                 String body = ctx.body();
                 byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), body.getBytes(StandardCharsets.UTF_8));
@@ -126,8 +126,8 @@ public class Downloader {
             }
         });
 
-        javalin.get("/", ctx -> ctx.redirect("/release", 301));
-        javalin.get("/:type", ctx -> {
+        app.get("/", ctx -> ctx.redirect("/release", 301));
+        app.get("/:type", ctx -> {
             File file;
             switch (ctx.pathParam("type").toLowerCase()) {
                 case "release":
