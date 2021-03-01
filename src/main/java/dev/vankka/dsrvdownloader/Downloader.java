@@ -126,6 +126,7 @@ public class Downloader {
             }
         });
 
+        javalin.get("/", ctx -> ctx.redirect("/release", 301));
         javalin.get("/:type", ctx -> {
             File file;
             switch (ctx.pathParam("type").toLowerCase()) {
