@@ -70,7 +70,8 @@ public class Downloader {
 
         javalin.post("/github-webhook", ctx -> {
             try {
-                byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), ctx.body().getBytes(StandardCharsets.UTF_8));
+                String body = ctx.body();
+                byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), body.getBytes(StandardCharsets.UTF_8));
                 if (bytes == null) {
                     ctx.status(401);
                     return;
@@ -87,7 +88,7 @@ public class Downloader {
                     return;
                 }
 
-                JSONObject jsonObject = new JSONObject(ctx.body());
+                JSONObject jsonObject = new JSONObject(body);
                 if (event.equals("check_suite")) {
                     JSONObject checkSuite = jsonObject.getJSONObject("check_suite");
                     if (checkSuite.getString("status").equals("completed") && checkSuite.getString("head_branch").equals("develop")) {
