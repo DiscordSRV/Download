@@ -32,6 +32,7 @@ public class DiscordSRVDownloader {
     private File releaseFile;
 
     private String snapshotHash;
+    private String snapshotMessage;
     private long snapshotLastChecked = 0L;
     private File snapshotFile;
     private String snapshotBuild;
@@ -91,11 +92,13 @@ public class DiscordSRVDownloader {
                 if (event.equals("check_suite")) {
                     JSONObject checkSuite = jsonObject.getJSONObject("check_suite");
                     if (checkSuite.getString("status").equals("completed") && checkSuite.getString("head_branch").equals("develop")) {
-                        String hash = checkSuite.getJSONObject("head_commit").getString("id");
+                        JSONObject headCommit = checkSuite.getJSONObject("head_commit");
+                        String hash = headCommit.getString("id");
 
                         String conclusion = checkSuite.getString("conclusion");
                         if (conclusion.equals("success")) {
                             snapshotHash = hash;
+                            snapshotMessage = headCommit.getString("message");
                             System.out.println("New snapshot has via check suite success: " + snapshotHash);
                         } else {
                             System.out.println("Check suite gave a non-success completion: " + conclusion);
@@ -290,7 +293,7 @@ public class DiscordSRVDownloader {
                 previousSnapshotHash = snapshotHash;
 
                 if (webhook) {
-                    postToWebhook(discordWebhookUrl, "Snapshot for commit `" + snapshotHash + "` is now available");
+                    postToWebhook(discordWebhookUrl, "Snapshot for commit: `" + snapshotMessage.replace("`", "\\`") + "` (`" + snapshotHash + "`) is now available");
                 }
             } else {
                 postToWebhook(discordWebhookUrl, "Unable to download snapshot from nexus");
