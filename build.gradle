@@ -24,7 +24,7 @@ jar {
 
     manifest {
         attributes(
-                'Main-Class': 'dev.vankka.dsrvdownloader.DiscordSRVDownloader'
+                'Main-Class': 'dev.vankka.dsrvdownloader.Downloader'
         )
     }
 }

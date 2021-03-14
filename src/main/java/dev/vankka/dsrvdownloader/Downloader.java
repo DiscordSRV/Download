@@ -18,12 +18,12 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-public class DiscordSRVDownloader {
+public class Downloader {
 
     private static final SimpleDateFormat RFC822_FORMATTER = new SimpleDateFormat("E, d MMM yyyy HH:mm:ss 'GMT'");
 
     public static void main(String[] args) {
-        new DiscordSRVDownloader(args);
+        new Downloader(args);
         RFC822_FORMATTER.setTimeZone(TimeZone.getTimeZone("GMT"));
     }
 
@@ -40,7 +40,7 @@ public class DiscordSRVDownloader {
 
     private final String discordWebhookUrl;
 
-    public DiscordSRVDownloader(String[] args) {
+    public Downloader(String[] args) {
         String secret = System.getenv("GITHUB_WEBHOOK_SECRET");
         if (secret == null || secret.isEmpty()) {
             if (args.length < 1) {
@@ -58,7 +58,7 @@ public class DiscordSRVDownloader {
             port = Integer.parseInt(args[1]);
         }
 
-        Javalin javalin = Javalin.create().start(port);
+        Javalin app = Javalin.create().start(port);
 
         String webhookUrl = System.getenv("DISCORD_WEBHOOK_URL");
         if ((webhookUrl == null || !webhookUrl.isEmpty()) && args.length > 2) {
@@ -69,9 +69,10 @@ public class DiscordSRVDownloader {
 
         String finalSecret = secret;
 
-        javalin.post("/github-webhook", ctx -> {
+        app.post("/github-webhook", ctx -> {
             try {
-                byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), ctx.body().getBytes(StandardCharsets.UTF_8));
+                String body = ctx.body();
+                byte[] bytes = hmac256(finalSecret.getBytes(StandardCharsets.UTF_8), body.getBytes(StandardCharsets.UTF_8));
                 if (bytes == null) {
                     ctx.status(401);
                     return;
@@ -88,7 +89,7 @@ public class DiscordSRVDownloader {
                     return;
                 }
 
-                JSONObject jsonObject = new JSONObject(ctx.body());
+                JSONObject jsonObject = new JSONObject(body);
                 if (event.equals("check_suite")) {
                     JSONObject checkSuite = jsonObject.getJSONObject("check_suite");
                     if (checkSuite.getString("status").equals("completed") && checkSuite.getString("head_branch").equals("develop")) {
@@ -121,6 +122,8 @@ public class DiscordSRVDownloader {
                     return;
                 }
 
+                readyFiles();
+
                 ctx.status(204);
             } catch (Throwable t) {
                 t.printStackTrace();
@@ -128,7 +131,8 @@ public class DiscordSRVDownloader {
             }
         });
 
-        javalin.get("/:type", ctx -> {
+        app.get("/", ctx -> ctx.redirect("/release", 301));
+        app.get("/:type", ctx -> {
             File file;
             switch (ctx.pathParam("type").toLowerCase()) {
                 case "release":
@@ -142,7 +146,8 @@ public class DiscordSRVDownloader {
                     return;
             }
             if (file != null && file.exists()) {
-                ctx.header("content-disposition", "attachment; filename=\"" + file.getName() + "\"");
+                ctx.header("Content-Disposition", "attachment; filename=\"" + file.getName() + "\"");
+                ctx.header("Content-Type", "application/java-archive");
                 try (InputStream inputStream = new FileInputStream(file)) {
                     try (OutputStream outputStream = ctx.res.getOutputStream()) {
                         IOUtils.copy(inputStream, outputStream);
@@ -153,12 +158,7 @@ public class DiscordSRVDownloader {
             }
         });
 
-        new Timer("DiscordSRVDownloader BackgroundWorker").scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                loop();
-            }
-        }, 0, TimeUnit.SECONDS.toMillis(5));
+        readyFiles();
     }
 
     private byte[] hmac256(byte[] secretKey, byte[] message) {
@@ -189,7 +189,7 @@ public class DiscordSRVDownloader {
         }
     }
 
-    private void loop() {
+    private void readyFiles() {
         long currentTime = System.currentTimeMillis();
 
         File storage = new File("storage");
@@ -277,7 +277,6 @@ public class DiscordSRVDownloader {
 
         if (!String.valueOf(previousSnapshotHash).equals(snapshotHash)) {
             String snapshotFileName = "DiscordSRV-Build-" + snapshotBuild + "-" + snapshotHash.substring(0, 7) + ".jar";
-            System.out.println("Getting snapshot artifact: " + snapshotFileName);
 
             File file = new File(storage, snapshotFileName);
             if (file.exists()) {
@@ -286,6 +285,7 @@ public class DiscordSRVDownloader {
                 return;
             }
 
+            System.out.println("Getting snapshot artifact: " + snapshotFileName);
             boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST", file);
             if (success) {
                 boolean webhook = snapshotFile != null; // don't send if we're getting this after a restart
