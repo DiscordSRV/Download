@@ -120,7 +120,12 @@ public class Downloader {
                         } else {
                             System.out.println("Check suite gave a non-success completion: " + conclusion);
                             postToWebhook(discordWebhookUrl, "Check suite completed with non-success status, commit: `" + hash + "`, conclusion: `" + conclusion + "`");
+                            ctx.status(200).result("Check suite did not succeed, not downloading new snapshot");
+                            return;
                         }
+                    } else {
+                        ctx.status(200).result("Check suite status was non-completed or it was not set to head_branch develop");
+                        return;
                     }
                 } else if (event.equals("release")) {
                     if (jsonObject.getString("action").equals("published")) {
