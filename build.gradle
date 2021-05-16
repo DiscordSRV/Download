@@ -22,6 +22,8 @@ jar {
         it.getName().endsWith('.jar') ? zipTree(it) : it
     }
 
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
     manifest {
         attributes(
                 'Main-Class': 'dev.vankka.dsrvdownloader.Downloader'
