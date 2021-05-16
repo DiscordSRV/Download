@@ -16,6 +16,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 public class Downloader {
@@ -37,6 +38,8 @@ public class Downloader {
     private File snapshotFile;
     private String snapshotBuild;
     private String previousSnapshotHash;
+
+    private final List<String> mostRecentPushes = new CopyOnWriteArrayList<>();
 
     private final String discordWebhookUrl;
 
@@ -90,11 +93,24 @@ public class Downloader {
                 }
 
                 JSONObject jsonObject = new JSONObject(body);
-                if (event.equals("check_suite")) {
+                if (event.equals("push")) {
+                    JSONObject headCommit = jsonObject.getJSONObject("head_commit");
+                    String id = headCommit.getString("id");
+                    if (mostRecentPushes.size() > 4) {
+                        mostRecentPushes.remove(4);
+                    }
+                    mostRecentPushes.add(id);
+                    ctx.status(204);
+                    return;
+                } else if (event.equals("check_suite")) {
                     JSONObject checkSuite = jsonObject.getJSONObject("check_suite");
                     if (checkSuite.getString("status").equals("completed") && checkSuite.getString("head_branch").equals("develop")) {
                         JSONObject headCommit = checkSuite.getJSONObject("head_commit");
                         String hash = headCommit.getString("id");
+                        if (!mostRecentPushes.contains(hash)) {
+                            ctx.status(200).result("This check suite's head sha has not been pushed, ignoring");
+                            return;
+                        }
 
                         String conclusion = checkSuite.getString("conclusion");
                         if (conclusion.equals("success")) {
@@ -117,8 +133,7 @@ public class Downloader {
                         }
                     }
                 } else if (!event.equals("ping")) {
-                    ctx.status(400);
-                    ctx.result("Only check_suite, release and ping are accepted");
+                    ctx.status(400).result("Only check_suite, release, push and ping are accepted");
                     return;
                 }
 
