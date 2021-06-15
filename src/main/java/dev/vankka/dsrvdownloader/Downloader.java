@@ -134,7 +134,7 @@ public class Downloader {
                         for (Object obj : release.getJSONArray("assets")) {
                             JSONObject asset = (JSONObject) obj;
                             releaseUrl = asset.getString("browser_download_url");
-                            releaseVersion = jsonObject.getString("tag_name").substring(1);
+                            releaseVersion = release.getString("tag_name").substring(1);
                             break;
                         }
                     }
