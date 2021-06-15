@@ -130,7 +130,8 @@ public class Downloader {
                 } else if (event.equals("release")) {
                     if (jsonObject.getString("action").equals("published")) {
                         System.out.println("New release publish detected");
-                        for (Object obj : jsonObject.getJSONArray("assets")) {
+                        JSONObject release = jsonObject.getJSONObject("release");
+                        for (Object obj : release.getJSONArray("assets")) {
                             JSONObject asset = (JSONObject) obj;
                             releaseUrl = asset.getString("browser_download_url");
                             releaseVersion = jsonObject.getString("tag_name").substring(1);
