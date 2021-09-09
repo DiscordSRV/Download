@@ -129,12 +129,14 @@ public class Downloader {
                     }
                 } else if (event.equals("release")) {
                     if (jsonObject.getString("action").equals("published")) {
-                        System.out.println("New release publish detected");
                         JSONObject release = jsonObject.getJSONObject("release");
-                        for (Object obj : release.getJSONArray("assets")) {
+                        JSONArray assets = release.getJSONArray("assets");
+                        logAndWebhook(discordWebhookUrl, "New release detected, " + assets.length() + " assets");
+                        for (Object obj : assets) {
                             JSONObject asset = (JSONObject) obj;
                             releaseUrl = asset.getString("browser_download_url");
                             releaseVersion = release.getString("tag_name").substring(1);
+                            logAndWebhook(discordWebhookUrl, "Release: " + releaseVersion + " (" + releaseUrl + ")");
                             break;
                         }
                     }
@@ -393,16 +395,21 @@ public class Downloader {
         }
     }
 
-    private void postToWebhook(String plainUrl, String content) {
+    private void logAndWebhook(String webhookUrl, String message) {
+        System.out.println(message);
+        postToWebhook(webhookUrl, message);
+    }
+
+    private void postToWebhook(String webhookUrl, String content) {
         try {
-            if (plainUrl == null || plainUrl.isEmpty()) {
+            if (webhookUrl == null || webhookUrl.isEmpty()) {
                 return;
             }
 
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("content", content);
 
-            URL url = new URL(plainUrl);
+            URL url = new URL(webhookUrl);
 
             HttpsURLConnection httpsURLConnection = (HttpsURLConnection) url.openConnection();
             httpsURLConnection.addRequestProperty("User-Agent", "DiscordSRV Downloader/1.0");
