@@ -128,6 +128,7 @@ public class Downloader {
                         return;
                     }
                 } else if (event.equals("release")) {
+                    logAndWebhook(discordWebhookUrl, "Release: " + jsonObject.getString("action"));
                     if (jsonObject.getString("action").equals("published")) {
                         JSONObject release = jsonObject.getJSONObject("release");
                         JSONArray assets = release.getJSONArray("assets");
