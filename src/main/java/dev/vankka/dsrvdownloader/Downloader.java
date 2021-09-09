@@ -116,10 +116,10 @@ public class Downloader {
                         if (conclusion.equals("success")) {
                             snapshotHash = hash;
                             snapshotMessage = headCommit.getString("message");
-                            System.out.println("New snapshot has via check suite success: " + snapshotHash);
+                            logAndWebhook("New snapshot has been detected via check suite success: " + snapshotHash);
                         } else {
                             System.out.println("Check suite gave a non-success completion: " + conclusion);
-                            postToWebhook(discordWebhookUrl, "Check suite completed with non-success status, commit: `" + hash + "`, conclusion: `" + conclusion + "`");
+                            postToWebhook("**FAILED** Check suite completed with non-success status, commit: `" + hash + "`, conclusion: `" + conclusion + "`");
                             ctx.status(200).result("Check suite did not succeed, not downloading new snapshot");
                             return;
                         }
@@ -128,16 +128,15 @@ public class Downloader {
                         return;
                     }
                 } else if (event.equals("release")) {
-                    logAndWebhook(discordWebhookUrl, "Release: " + jsonObject.getString("action"));
                     if (jsonObject.getString("action").equals("published")) {
                         JSONObject release = jsonObject.getJSONObject("release");
                         JSONArray assets = release.getJSONArray("assets");
-                        logAndWebhook(discordWebhookUrl, "New release detected, " + assets.length() + " assets");
+                        logAndWebhook("New release detected, " + assets.length() + " assets");
                         for (Object obj : assets) {
                             JSONObject asset = (JSONObject) obj;
                             releaseUrl = asset.getString("browser_download_url");
                             releaseVersion = release.getString("tag_name").substring(1);
-                            logAndWebhook(discordWebhookUrl, "Release: " + releaseVersion + " (" + releaseUrl + ")");
+                            logAndWebhook("Release: " + releaseVersion + " (" + releaseUrl + ")");
                             break;
                         }
                     }
@@ -246,8 +245,9 @@ public class Downloader {
 
         // Release jar download
 
-        if (releaseVersion != null && releaseUrl != null && (releaseFile == null || !releaseFile.exists())) {
-            String releaseFileName = "DiscordSRV-Build-" + releaseVersion + ".jar";
+        String releaseFileName = "DiscordSRV-Build-" + releaseVersion + ".jar";
+        if (releaseVersion != null && releaseUrl != null
+                && (releaseFile == null || !releaseFile.getName().equals(releaseFileName))) {
             File file = new File(storage, releaseFileName);
             if (file.exists()) {
                 releaseFile = file;
@@ -258,10 +258,10 @@ public class Downloader {
                     releaseFile = file;
 
                     if (webhook) {
-                        postToWebhook(discordWebhookUrl, "Release `" + releaseVersion + "` is now available");
+                        postToWebhook("Release `" + releaseVersion + "` is now available");
                     }
                 } else {
-                    postToWebhook(discordWebhookUrl, "Failed to download release from Github");
+                    postToWebhook("**FAILED** to download release from Github");
 
                     try {
                         Files.delete(file.toPath());
@@ -296,7 +296,6 @@ public class Downloader {
             }
         }
 
-
         // Snapshot jar download
 
         if (!String.valueOf(previousSnapshotHash).equals(snapshotHash)) {
@@ -309,7 +308,7 @@ public class Downloader {
                 return;
             }
 
-            System.out.println("Getting snapshot artifact: " + snapshotFileName);
+            postToWebhook("Downloading snapshot artifact `" + snapshotFileName + "`...");
             boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST", file);
             if (success) {
                 boolean webhook = snapshotFile != null; // don't send if we're getting this after a restart
@@ -317,10 +316,10 @@ public class Downloader {
                 previousSnapshotHash = snapshotHash;
 
                 if (webhook) {
-                    postToWebhook(discordWebhookUrl, "Snapshot for commit: `" + snapshotMessage.replace("`", "\\`") + "` (`" + snapshotHash + "`) is now available");
+                    postToWebhook("New Snapshot for commit: `" + snapshotMessage.replace("`", "\\`") + "` (`" + snapshotHash + "`) is now available");
                 }
             } else {
-                postToWebhook(discordWebhookUrl, "Unable to download snapshot from nexus");
+                postToWebhook("**FAILED** to download snapshot from nexus (" + snapshotHash + ")");
 
                 try {
                     Files.delete(file.toPath());
@@ -334,7 +333,8 @@ public class Downloader {
         File[] files = storage.listFiles();
         if (files != null) {
             for (File file : files) {
-                if (!file.getAbsolutePath().equals(snapshotFile.getAbsolutePath()) && !file.getAbsolutePath().equals(releaseFile.getAbsolutePath())) {
+                if (!file.getAbsolutePath().equals(snapshotFile.getAbsolutePath())
+                        && !file.getAbsolutePath().equals(releaseFile.getAbsolutePath())) {
                     try {
                         Files.delete(file.toPath());
                     } catch (IOException e) {
@@ -396,13 +396,14 @@ public class Downloader {
         }
     }
 
-    private void logAndWebhook(String webhookUrl, String message) {
+    private void logAndWebhook(String message) {
         System.out.println(message);
-        postToWebhook(webhookUrl, message);
+        postToWebhook(message);
     }
 
-    private void postToWebhook(String webhookUrl, String content) {
+    private void postToWebhook(String content) {
         try {
+            String webhookUrl = discordWebhookUrl;
             if (webhookUrl == null || webhookUrl.isEmpty()) {
                 return;
             }
