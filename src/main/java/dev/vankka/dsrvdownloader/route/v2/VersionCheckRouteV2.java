@@ -2,6 +2,7 @@ package dev.vankka.dsrvdownloader.route.v2;
 
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
+import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.jetbrains.annotations.NotNull;
@@ -15,11 +16,16 @@ public class VersionCheckRouteV2 implements Handler {
     }
 
     @Override
-    public void handle(@NotNull Context ctx) throws Exception {
-        VersionChannel channel = downloader.getConfig(ctx);
+    public void handle(@NotNull Context ctx) {
+        VersionChannel channel = downloader.getChannel(ctx);
+        String identifier = ctx.pathParam("identifier");
 
-        String commitOrRelease = ctx.pathParam("commitOrRelease");
+        try {
+            int behind = channel.versionsBehind(identifier);
 
-
+            ctx.result(String.valueOf(behind)); // TODO: more advanced response
+        } catch (IllegalArgumentException ignored) {
+            throw new BadRequestResponse();
+        }
     }
 }

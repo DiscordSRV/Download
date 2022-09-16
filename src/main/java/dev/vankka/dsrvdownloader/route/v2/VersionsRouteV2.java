@@ -16,7 +16,9 @@ public class VersionsRouteV2 implements Handler {
 
     @Override
     public void handle(@NotNull Context ctx) {
-        VersionChannel channel = downloader.getConfig(ctx);
+        VersionChannel channel = downloader.getChannel(ctx);
+
+        ctx.contentType("application/json");
         ctx.result(channel.versionResponse());
     }
 }

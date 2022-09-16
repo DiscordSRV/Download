@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.Version;
+import dev.vankka.dsrvdownloader.route.v2.DownloadRouteV2;
 import okhttp3.Call;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -28,45 +29,50 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         this.downloader = downloader;
         this.config = config;
         this.versions = new LinkedHashMap<>();
-
-        Path path = Paths.get("/home/vankka/mctest/paper1.18/plugins/DiscordSRV-Bukkit-2.0.0-SNAPSHOT.jar");
-        try {
-            versions.put("test", new Version(path.getFileName().toString(), Files.size(path), path, Files.readAllBytes(path)));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        updateVersionResponse();
-//        try {
-//            updateCommits();
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
     }
 
-    private void updateVersionResponse() {
-        ArrayNode array = downloader.objectMapper().createArrayNode();
-        for (Map.Entry<String, Version> entry : versions.entrySet()) {
+    protected String describe() {
+        return config.name;
+    }
+
+    protected String repo() {
+        return config.repoOwner + "/" + config.repoName;
+    }
+
+    protected String baseRepoUrl() {
+        return Downloader.GITHUB_URL + "/repos/" + repo();
+    }
+
+    protected Path store() throws IOException {
+        Path path = Paths.get("storage", config.name);
+        if (!Files.exists(path)) {
+            Files.createDirectories(path);
+        }
+        return path;
+    }
+
+    protected void updateVersionResponse() {
+        String url = downloader.config().apiUrl + "/v2/" + repo() + "/" + config.name + "/download/";
+
+        ObjectNode response = downloader.objectMapper().createObjectNode();
+        response.put("latest_url", url + LATEST_IDENTIFIER);
+
+        ArrayNode versions = response.putArray("versions");
+        for (Map.Entry<String, Version> entry : this.versions.entrySet()) {
+            String identifier = entry.getKey();
             Version version = entry.getValue();
             if (version.getExpiry() != null) {
                 continue;
             }
 
-            ObjectNode objectNode = array.addObject();
-            objectNode.put("identifier", entry.getKey());
-            objectNode.put("name", version.getName());
+            ObjectNode objectNode = versions.addObject();
+            objectNode.put("identifier", identifier);
+            objectNode.put("file_name", version.getName());
             objectNode.put("size", version.getSize());
+            objectNode.put("download_url", url + identifier);
         }
-        versionResponse = array.toString();
-    }
 
-    private void updateCommits() throws IOException {
-        Request request = new Request.Builder()
-                .url(Downloader.GITHUB_URL + "/repos/" + config.repoOwner + "/" + config.repoName + "/commits")
-                .get().build();
-
-        try (Response response = downloader.httpClient().newCall(request).execute()) {
-            System.out.println(response.body().string());
-        }
+        versionResponse = response.toString();
     }
 
     @Override

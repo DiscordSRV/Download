@@ -13,9 +13,9 @@ public class VersionChannelConfig {
     public enum Type {
 
         /**
-         * Uses GitHub repo tags.
+         * Uses GitHub repo releases.
          */
-        TAG,
+        RELEASE,
 
         /**
          * Uses GitHub branch commits.

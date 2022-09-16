@@ -6,6 +6,7 @@ import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import io.javalin.http.NotFoundResponse;
+import io.javalin.http.ServiceUnavailableResponse;
 import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -13,6 +14,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.Map;
 
 public class DownloadRouteV2 implements Handler {
 
@@ -24,10 +26,21 @@ public class DownloadRouteV2 implements Handler {
 
     @Override
     public void handle(@NotNull Context ctx) throws Exception {
-        VersionChannel channel = downloader.getConfig(ctx);
+        VersionChannel channel = downloader.getChannel(ctx);
 
-        String identifier = ctx.pathParam("commitOrRelease");
-        Version version = channel.versions().get(identifier);
+        String identifier = ctx.pathParam("identifier");
+        Map<String, Version> versions = channel.versions();
+
+        Version version;
+        if (identifier.equalsIgnoreCase(VersionChannel.LATEST_IDENTIFIER)) {
+            if (versions.isEmpty()) {
+                throw new ServiceUnavailableResponse();
+            }
+
+            version = versions.values().iterator().next();
+        } else {
+            version = versions.get(identifier);
+        }
         if (version == null) {
             throw new NotFoundResponse();
         }
