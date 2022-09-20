@@ -9,13 +9,15 @@ public class Version {
     private final String name;
     private final long size;
     private final Path file;
+    private final Path metaFile;
     private byte[] content;
     private Long expiry;
 
-    public Version(String name, long size, Path file, @Nullable byte[] content) {
+    public Version(String name, long size, Path file, @Nullable Path metaFile, @Nullable byte[] content) {
         this.name = name;
         this.size = size;
         this.file = file;
+        this.metaFile = metaFile;
         this.content = content;
     }
 
@@ -32,6 +34,11 @@ public class Version {
     }
 
     @Nullable
+    public Path getMetaFile() {
+        return metaFile;
+    }
+
+    @Nullable
     public byte[] getContent() {
         return content;
     }
@@ -42,6 +49,10 @@ public class Version {
 
     public void expireIn(Long expiry) {
         this.expiry = expiry;
-        this.content = null; // Don't keep expiring versions in memory
+        removeFromMemory(); // Don't keep expiring versions in memory
+    }
+
+    public void removeFromMemory() {
+        this.content = null;
     }
 }

@@ -5,11 +5,9 @@ import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.RepoConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
-import io.javalin.http.BadRequestResponse;
-import io.javalin.http.Context;
-import io.javalin.http.ForbiddenResponse;
-import io.javalin.http.Handler;
-import org.jetbrains.annotations.NotNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -17,7 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
-public class GithubWebhookRouteV2 implements Handler {
+@RestController
+public class GithubWebhookRouteV2 {
 
     private final Downloader downloader;
 
@@ -25,12 +24,17 @@ public class GithubWebhookRouteV2 implements Handler {
         this.downloader = downloader;
     }
 
-    @Override
-    public void handle(@NotNull Context ctx) throws Exception {
-        String repoOwner = ctx.pathParam("repoOwner");
-        String repoName = ctx.pathParam("repoName");
-        String route = ctx.pathParam("route");
-
+    @SuppressWarnings("UastIncorrectHttpHeaderInspection")
+    @GetMapping("/v2/{repoOwner}/{repoName}/github-webhook/{route}")
+    @ResponseStatus(HttpStatus.OK)
+    public void handle(
+            @PathVariable String repoOwner,
+            @PathVariable String repoName,
+            @PathVariable String route,
+            @RequestHeader("X-Hub-Signature-256") String signature,
+            @RequestHeader("X-GitHub-Event") String event,
+            @RequestBody byte[] body
+    ) throws Exception {
         RepoConfig repoConfig = null;
         for (RepoConfig repo : downloader.config().repos) {
             if (repo.repoOwner.equalsIgnoreCase(repoOwner) && repo.repoName.equalsIgnoreCase(repoName)) {
@@ -39,26 +43,24 @@ public class GithubWebhookRouteV2 implements Handler {
             }
         }
         if (repoConfig == null || !repoConfig.githubWebhookPath.equals(route)) {
-            throw new ForbiddenResponse();
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        byte[] body = ctx.bodyAsBytes();
+        if (event == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+
         byte[] bytes = hmac256(repoConfig.githubWebhookSecret.getBytes(StandardCharsets.UTF_8), body);
         if (bytes == null) {
-            throw new ForbiddenResponse();
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        String signature = "sha256=" + hex(bytes);
-        if (!signature.equals(ctx.header("X-Hub-Signature-256"))) {
-            throw new ForbiddenResponse();
+        String requiredSignature = "sha256=" + hex(bytes);
+        if (!requiredSignature.equals(signature)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        String event = ctx.header("X-GitHub-Event");
-        if (event == null) {
-            throw new BadRequestResponse();
-        }
-
-        JsonNode node = downloader.objectMapper().readTree(body);
+        JsonNode node = Downloader.OBJECT_MAPPER.readTree(body);
         for (VersionChannel versionChannel : downloader.versionChannels()) {
             VersionChannelConfig config = versionChannel.config();
             if (config.repoOwner.equalsIgnoreCase(repoOwner) && config.repoName.equalsIgnoreCase(repoName)) {

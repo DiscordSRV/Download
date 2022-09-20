@@ -8,9 +8,9 @@ import okhttp3.Response;
 
 import java.io.IOException;
 
-public class CommitChannel extends AbstractVersionChannel {
+public class WorkflowChannel extends AbstractVersionChannel {
 
-    public CommitChannel(Downloader downloader, VersionChannelConfig config) {
+    public WorkflowChannel(Downloader downloader, VersionChannelConfig config) {
         super(downloader, config);
     }
 

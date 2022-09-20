@@ -13,7 +13,7 @@ public interface VersionChannel {
 
     VersionChannelConfig config();
     Map<String, Version> versions();
-    String versionResponse();
+    byte[] versionResponse();
     int versionsBehind(String comparedTo) throws IllegalArgumentException;
     void receiveWebhook(String event, JsonNode node);
 

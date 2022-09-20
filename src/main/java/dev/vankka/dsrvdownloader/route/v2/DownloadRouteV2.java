@@ -3,20 +3,21 @@ package dev.vankka.dsrvdownloader.route.v2;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
-import io.javalin.http.Context;
-import io.javalin.http.Handler;
-import io.javalin.http.NotFoundResponse;
-import io.javalin.http.ServiceUnavailableResponse;
-import org.apache.commons.io.IOUtils;
-import org.jetbrains.annotations.NotNull;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.Map;
 
-public class DownloadRouteV2 implements Handler {
+@RestController
+public class DownloadRouteV2 {
 
     private final Downloader downloader;
 
@@ -24,17 +25,22 @@ public class DownloadRouteV2 implements Handler {
         this.downloader = downloader;
     }
 
-    @Override
-    public void handle(@NotNull Context ctx) throws Exception {
-        VersionChannel channel = downloader.getChannel(ctx);
+    @GetMapping("/v2/{repoOwner}/{repoName}/{releaseChannel}/download/{identifier}")
+    public ResponseEntity<?> handle(
+            @PathVariable String repoOwner,
+            @PathVariable String repoName,
+            @PathVariable String releaseChannel,
+            @PathVariable String identifier
+    ) throws Exception {
+        VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown repository or channel"));
 
-        String identifier = ctx.pathParam("identifier");
         Map<String, Version> versions = channel.versions();
 
         Version version;
         if (identifier.equalsIgnoreCase(VersionChannel.LATEST_IDENTIFIER)) {
             if (versions.isEmpty()) {
-                throw new ServiceUnavailableResponse();
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No versions available for this channel");
             }
 
             version = versions.values().iterator().next();
@@ -42,23 +48,20 @@ public class DownloadRouteV2 implements Handler {
             version = versions.get(identifier);
         }
         if (version == null) {
-            throw new NotFoundResponse();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Version not found");
         }
-
-        ctx.header("Content-Disposition", "attachment; filename=\"" + version.getName() + "\"");
-        ctx.header("Content-Type", "application/java-archive");
-        ctx.header("Content-Length", String.valueOf(version.getSize()));
 
         byte[] content = version.getContent();
-
-        try (InputStream inputStream =
-                     content != null
-                        ? new ByteArrayInputStream(content)
-                        : Files.newInputStream(version.getFile())
-        ) {
-            try (OutputStream outputStream = ctx.res.getOutputStream()) {
-                IOUtils.copy(inputStream, outputStream);
-            }
-        }
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"" + version.getName() + "\"")
+                .contentType(MediaType.valueOf("application/java-archive"))
+                .contentLength(version.getSize())
+                .body(
+                        new InputStreamResource(
+                                content != null
+                                    ? new ByteArrayInputStream(content)
+                                    : Files.newInputStream(version.getFile())
+                        )
+                );
     }
 }

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
-import dev.vankka.dsrvdownloader.model.Release;
+import dev.vankka.dsrvdownloader.model.github.Release;
 import dev.vankka.dsrvdownloader.model.Version;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class ReleaseChannel extends AbstractVersionChannel {
 
@@ -24,6 +25,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
         super(downloader, config);
         updateReleases();
         loadFiles();
+        cleanupDirectory();
     }
 
     private void updateReleases() {
@@ -38,19 +40,32 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
             ResponseBody body = response.body();
             if (body != null) {
-                releases = downloader.objectMapper().readValue(body.byteStream(), new TypeReference<>(){});
+                releases = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), new TypeReference<>(){});
             }
         } catch (IOException e) {
             Downloader.LOGGER.error("Failed to get releases for repository " + repo(), e);
         }
     }
 
-    private void includeRelease(Release release) {
+    private void includeRelease(Release release, boolean inMemory) {
         Path store;
         try {
             store = store();
 
-            Release.Asset asset = release.assets.get(0); // TODO: tbd
+            Pattern pattern = Pattern.compile(config.fileNameFormat);
+            Release.Asset asset = null;
+            for (Release.Asset releaseAsset : release.assets) {
+                if (pattern.matcher(releaseAsset.name).matches()) {
+                    asset = releaseAsset;
+                    break;
+                }
+            }
+            if (asset == null) {
+                Downloader.LOGGER.error(
+                        "Failed to find a file matching " + pattern.pattern()
+                                + " for release " + release.tag_name + " for " + describe());
+                return;
+            }
 
             String fileName = asset.name;
             Path file = store.resolve(fileName);
@@ -72,19 +87,19 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
                     Files.createFile(file);
 
-                    if (config.keepVersionsInMemory) {
+                    if (inMemory) {
                         bytes = body.bytes();
                         Files.write(file, bytes);
                     } else {
                         IOUtils.copy(body.byteStream(), Files.newOutputStream(file));
                     }
                 }
-            } else if (config.keepVersionsInMemory) {
+            } else if (inMemory) {
                 bytes = Files.readAllBytes(file);
             }
 
             long size = bytes != null ? bytes.length : Files.size(file);
-            versions.put(release.tag_name, new Version(fileName, size, file, bytes));
+            versions.put(release.tag_name, new Version(fileName, size, file, null, bytes));
         } catch (IOException e) {
             Downloader.LOGGER.error("Failed to load release " + release.tag_name + " for " + describe(), e);
         }
@@ -93,7 +108,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
     private void loadFiles() {
         int max = Math.min(config.versionsToKeep, releases.size());
         for (int i = 0; i < max; i++) {
-            includeRelease(releases.get(i));
+            includeRelease(releases.get(i), config.versionToKeepInMemory > i);
         }
         updateVersionResponse();
     }
