@@ -26,7 +26,7 @@ public class GithubWebhookRouteV2 {
 
     @SuppressWarnings("UastIncorrectHttpHeaderInspection")
     @GetMapping("/v2/{repoOwner}/{repoName}/github-webhook/{route}")
-    @ResponseStatus(HttpStatus.OK)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void handle(
             @PathVariable String repoOwner,
             @PathVariable String repoName,

@@ -3,44 +3,46 @@ package dev.vankka.dsrvdownloader.model;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Version {
 
-    private final String name;
-    private final long size;
-    private final Path file;
+    private final String identifier;
     private final Path metaFile;
-    private byte[] content;
+    private final Map<String, Artifact> artifactsByIdentifier;
+    private final Map<String, Artifact> artifactsByFileName;
     private Long expiry;
 
-    public Version(String name, long size, Path file, @Nullable Path metaFile, @Nullable byte[] content) {
-        this.name = name;
-        this.size = size;
-        this.file = file;
+    public Version(
+            String identifier,
+            @Nullable Path metaFile,
+            Map<String, Artifact> artifactsByIdentifier
+    ) {
+        this.identifier = identifier;
         this.metaFile = metaFile;
-        this.content = content;
+        this.artifactsByIdentifier = artifactsByIdentifier;
+        Map<String, Artifact> artifactsByFileName = new HashMap<>();
+        for (Artifact artifact : artifactsByIdentifier.values()) {
+            artifactsByFileName.put(artifact.getFileName(), artifact);
+        }
+        this.artifactsByFileName = artifactsByFileName;
     }
 
-    public String getName() {
-        return name;
+    public String getIdentifier() {
+        return identifier;
     }
 
-    public long getSize() {
-        return size;
-    }
-
-    public Path getFile() {
-        return file;
-    }
-
-    @Nullable
     public Path getMetaFile() {
         return metaFile;
     }
 
-    @Nullable
-    public byte[] getContent() {
-        return content;
+    public Map<String, Artifact> getArtifactsByIdentifier() {
+        return artifactsByIdentifier;
+    }
+
+    public Map<String, Artifact> getArtifactsByFileName() {
+        return artifactsByFileName;
     }
 
     public Long getExpiry() {
@@ -49,10 +51,6 @@ public class Version {
 
     public void expireIn(Long expiry) {
         this.expiry = expiry;
-        removeFromMemory(); // Don't keep expiring versions in memory
-    }
-
-    public void removeFromMemory() {
-        this.content = null;
+        artifactsByIdentifier.values().forEach(Artifact::removeFromMemory); // Don't keep expiring versions in memory
     }
 }

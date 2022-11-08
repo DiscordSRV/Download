@@ -4,14 +4,11 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
+import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
-import dev.vankka.dsrvdownloader.route.v2.DownloadRouteV2;
-import okhttp3.Call;
-import okhttp3.Request;
-import okhttp3.Response;
 
+import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,7 +24,6 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     protected final Downloader downloader;
     protected final VersionChannelConfig config;
     protected final Map<String, Version> versions;
-    protected byte[] versionResponse;
 
     public AbstractVersionChannel(Downloader downloader, VersionChannelConfig config) {
         this.downloader = downloader;
@@ -43,7 +39,11 @@ public abstract class AbstractVersionChannel implements VersionChannel {
             try (Stream<Path> pathStream = Files.list(store)) {
                 toDelete = pathStream
                         .filter(path -> versions.values().stream()
-                                .noneMatch(ver -> path.equals(ver.getFile()) || path.equals(ver.getMetaFile()))
+                                .noneMatch(ver -> path.equals(ver.getMetaFile())
+                                        || ver.getArtifactsByIdentifier().values()
+                                            .stream()
+                                            .anyMatch(art -> path.equals(art.getFile()))
+                                )
                         )
                         .collect(Collectors.toList());
             }
@@ -57,14 +57,14 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected String describe() {
-        return config.name;
+        return repo() + ":" + config.name;
     }
 
     protected String repo() {
         return config.repoOwner + "/" + config.repoName;
     }
 
-    protected String baseRepoUrl() {
+    protected String baseRepoApiUrl() {
         return Downloader.GITHUB_URL + "/repos/" + repo();
     }
 
@@ -76,28 +76,8 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         return path;
     }
 
-    protected void updateVersionResponse() {
-        String url = downloader.config().apiUrl + "/v2/" + repo() + "/" + config.name + "/download/";
-
-        ObjectNode response = Downloader.OBJECT_MAPPER.createObjectNode();
-        response.put("latest_url", url + LATEST_IDENTIFIER);
-
-        ArrayNode versions = response.putArray("versions");
-        for (Map.Entry<String, Version> entry : this.versions.entrySet()) {
-            String identifier = entry.getKey();
-            Version version = entry.getValue();
-            if (version.getExpiry() != null) {
-                continue;
-            }
-
-            ObjectNode objectNode = versions.addObject();
-            objectNode.put("identifier", identifier);
-            objectNode.put("file_name", version.getName());
-            objectNode.put("size", version.getSize());
-            objectNode.put("download_url", url + identifier);
-        }
-
-        versionResponse = response.toString().getBytes(StandardCharsets.UTF_8);
+    protected void putVersion(Version version) {
+        versions.put(version.getIdentifier(), version);
     }
 
     @Override
@@ -106,12 +86,54 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     @Override
-    public Map<String, Version> versions() {
+    public Map<String, Version> versionsByIdentifier() {
         return Collections.unmodifiableMap(versions);
     }
 
     @Override
-    public byte[] versionResponse() {
-        return versionResponse;
+    public String getUrl(HttpServletRequest request) {
+        boolean isHttps = request.isSecure();
+        int port = request.getServerPort();
+        if (port == 0) {
+            port = 80;
+        }
+        String hostName = request.getHeader("X-Forwarded-Host");
+        String host = request.getScheme()
+                + "://" + (hostName != null ? hostName : request.getServerName())
+                + (port == (isHttps ? 443 : 80) ? "" : ":" + port);
+
+        return host + "/v2/" + repo() + "/" + config.name;
+    }
+
+    @Override
+    public String versionResponse(HttpServletRequest request, boolean preferIdentifier) {
+        String baseUrl = getUrl(request) + "/download/";
+
+        ObjectNode response = Downloader.OBJECT_MAPPER.createObjectNode();
+        ArrayNode versions = response.putArray("versions");
+        for (Version version : this.versions.values()) {
+            if (version.getExpiry() != null) {
+                continue;
+            }
+
+            ObjectNode objectNode = versions.addObject();
+            objectNode.put("identifier", version.getIdentifier());
+
+            ObjectNode artifacts = objectNode.with("artifacts");
+
+            for (Map.Entry<String, Artifact> artifactEntry : version.getArtifactsByIdentifier().entrySet()) {
+                String artifactIdentifier = artifactEntry.getKey();
+                Artifact artifact = artifactEntry.getValue();
+
+                ObjectNode artifactNode = artifacts.with(artifactEntry.getKey());
+                artifactNode.put("file_name", artifact.getFileName());
+                artifactNode.put("size", artifact.getSize());
+                artifactNode.put("download_url", baseUrl + version.getIdentifier() + "/"
+                        + (preferIdentifier ? artifactIdentifier : artifact.getFileName()));
+            }
+
+        }
+
+        return response.toString();
     }
 }

@@ -1,8 +1,6 @@
 package dev.vankka.dsrvdownloader.model.github;
 
-public class WorkflowRun {
-
+public class Workflow {
     public long id;
-    public String head_sha;
-
+    public String path;
 }

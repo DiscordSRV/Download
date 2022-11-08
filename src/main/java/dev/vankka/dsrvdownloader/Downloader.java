@@ -28,7 +28,8 @@ public class Downloader {
 
     public static Logger LOGGER = LoggerFactory.getLogger("Downloader");
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES, false);
+            .configure(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES, false)
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     public static String GITHUB_URL = "https://api.github.com";
 
     private static Config reloadConfig() throws IOException, NumberFormatException {
@@ -39,12 +40,6 @@ public class Downloader {
             config.port = Integer.parseInt(port);
         }
 
-        String apiUrl = config.apiUrl;
-        if (apiUrl == null) {
-            config.apiUrl = "http://localhost:" + config.port;
-        } else if (apiUrl.endsWith("/")) {
-            config.apiUrl = apiUrl.substring(0, apiUrl.length() - 1);
-        }
         return config;
     }
 

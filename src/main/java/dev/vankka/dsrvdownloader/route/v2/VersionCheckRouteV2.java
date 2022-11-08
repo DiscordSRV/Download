@@ -3,6 +3,7 @@ package dev.vankka.dsrvdownloader.route.v2;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +19,10 @@ public class VersionCheckRouteV2 {
         this.downloader = downloader;
     }
 
-    @GetMapping("/v2/{repoOwner}/{repoName}/{releaseChannel}/version-check/{identifier}")
+    @GetMapping(
+            path = "/v2/{repoOwner}/{repoName}/{releaseChannel}/version-check/{identifier}",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
     public ResponseEntity<?> handle(
             @PathVariable String repoOwner,
             @PathVariable String repoName,

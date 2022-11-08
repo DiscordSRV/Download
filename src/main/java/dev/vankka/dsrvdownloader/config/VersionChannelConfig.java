@@ -1,5 +1,7 @@
 package dev.vankka.dsrvdownloader.config;
 
+import java.util.List;
+
 public class VersionChannelConfig {
 
     public String name;
@@ -7,11 +9,13 @@ public class VersionChannelConfig {
     public String repoName;
     public Type type;
     public int versionsToKeep;
-    public int versionToKeepInMemory;
-    public String fileNameFormat;
+    public int versionsToKeepInMemory;
+    public List<VersionArtifactConfig> artifacts;
 
-    // Commit workflows only
+    // Workflows only
     public String branch;
+    public String workflowFile;
+    public int pagesOfRunsToKeep;
 
     public enum Type {
 
