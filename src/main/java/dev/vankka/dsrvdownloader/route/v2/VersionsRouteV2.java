@@ -34,7 +34,7 @@ public class VersionsRouteV2 {
             HttpServletRequest request
     ) {
         VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown repository or channel"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)

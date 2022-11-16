@@ -30,7 +30,7 @@ public class VersionCheckRouteV2 {
             @PathVariable String identifier
     ) {
         VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown repository or channel"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
         try {
             int behind = channel.versionsBehind(identifier);

@@ -43,7 +43,7 @@ public class DownloadRouteV2 {
             HttpServletRequest request
     ) throws Exception {
         VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown repository or channel"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
         Map<String, Version> versions = channel.versionsByIdentifier();
 
@@ -61,7 +61,7 @@ public class DownloadRouteV2 {
             version = versions.get(identifier);
         }
         if (version == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Version not found");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Version not found");
         }
 
         Artifact artifact = version.getArtifactsByFileName().get(artifactIdentifier);
@@ -70,7 +70,7 @@ public class DownloadRouteV2 {
             artifact = version.getArtifactsByIdentifier().get(artifactIdentifier);
         }
         if (artifact == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Artifact not found");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Artifact not found");
         }
 
         if (isRedirect && preferRedirect) {

@@ -5,5 +5,5 @@ import java.util.List;
 public class WorkflowRunPaging {
 
     public int total_count;
-    public List<WorkflowRun> workflows_runs;
+    public List<WorkflowRun> workflow_runs;
 }

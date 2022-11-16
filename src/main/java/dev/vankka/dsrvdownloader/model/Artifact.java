@@ -11,16 +11,19 @@ public class Artifact {
     private final String fileName;
     private final long size;
     private final Path file;
+    private final Path metaFile;
     private byte[] content;
 
     public Artifact(
             String fileName,
             Path file,
+            @Nullable Path metaFile,
             @Nullable byte[] content
     ) throws IOException {
         this(
                 fileName,
                 content != null ? content.length : Files.size(file),
+                metaFile,
                 file,
                 content
         );
@@ -30,11 +33,13 @@ public class Artifact {
             String fileName,
             long size,
             Path file,
+            @Nullable Path metaFile,
             @Nullable byte[] content
     ) {
         this.fileName = fileName;
         this.size = size;
         this.file = file;
+        this.metaFile = metaFile;
         this.content = content;
     }
 
@@ -48,6 +53,10 @@ public class Artifact {
 
     public Path getFile() {
         return file;
+    }
+
+    public Path getMetaFile() {
+        return metaFile;
     }
 
     @Nullable

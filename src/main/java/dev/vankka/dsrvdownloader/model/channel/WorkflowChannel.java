@@ -2,24 +2,29 @@ package dev.vankka.dsrvdownloader.model.channel;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
+import dev.vankka.dsrvdownloader.config.VersionArtifactConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.Artifact;
+import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.WorkflowFileMetadata;
-import dev.vankka.dsrvdownloader.model.github.Workflow;
-import dev.vankka.dsrvdownloader.model.github.WorkflowPaging;
-import dev.vankka.dsrvdownloader.model.github.WorkflowRun;
-import dev.vankka.dsrvdownloader.model.github.WorkflowRunPaging;
+import dev.vankka.dsrvdownloader.model.github.*;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.tuple.Triple;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class WorkflowChannel extends AbstractVersionChannel {
 
@@ -43,7 +48,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         int page = 0;
         while (workflow == null) {
             Request request = new Request.Builder()
-                    .url(baseRepoApiUrl() + "/workflows?per_page=" + WORKFLOWS_PER_PAGE + "&page=" + (++page))
+                    .url(baseRepoApiUrl() + "/actions/workflows?per_page=" + WORKFLOWS_PER_PAGE + "&page=" + (++page))
                     .get().build();
 
             try (Response response = downloader.httpClient().newCall(request).execute()) {
@@ -56,14 +61,14 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 }
 
                 WorkflowPaging workflowPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowPaging.class);
-                if (workflowPaging.total_count < WORKFLOWS_PER_PAGE) {
-                    break;
-                }
                 for (Workflow wf : workflowPaging.workflows) {
                     if (wf.path.endsWith(config.workflowFile)) {
                         workflow = wf;
                         break;
                     }
+                }
+                if (workflowPaging.total_count < WORKFLOWS_PER_PAGE) {
+                    break;
                 }
             } catch (IOException e) {
                 Downloader.LOGGER.error("Failed to get workflows for " + describe(), e);
@@ -81,7 +86,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         for (int i = 0; i < pages; i++) {
             Request request = new Request.Builder()
                     .url(baseRepoApiUrl()
-                                 + "/actions/workflows/" + Long.toUnsignedString(workflow.id)
+                                 + "/actions/workflows/" + Long.toUnsignedString(workflow.id) + "/runs"
                                  + "?status=success&event=push&branch=" + config.branch
                                  + "&per_page=" + WORKFLOWS_RUNS_PER_PAGE + "&page=" + (i + 1))
                     .get().build();
@@ -96,14 +101,14 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 }
 
                 WorkflowRunPaging workflowRunPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowRunPaging.class);
-                if (workflowRunPaging == null) {
+                if (workflowRunPaging == null || workflowRunPaging.workflow_runs == null) {
                     Downloader.LOGGER.error(
-                            "Failed to get workflow runs for " + describe() + ": Failed to parse json: " + body.string());
+                            "Failed to get workflow runs for " + describe() + ": Failed to parse json");
                     return;
                 }
 
-                workflowRuns.addAll(workflowRunPaging.workflows_runs);
-                if (workflowRunPaging.workflows_runs.size() < WORKFLOWS_RUNS_PER_PAGE) {
+                workflowRuns.addAll(workflowRunPaging.workflow_runs);
+                if (workflowRunPaging.total_count < WORKFLOWS_RUNS_PER_PAGE) {
                     break;
                 }
             } catch (IOException e) {
@@ -113,66 +118,91 @@ public class WorkflowChannel extends AbstractVersionChannel {
     }
 
     private void loadFilesAndCleanupStore() {
-        Map<String, Path> nonMetaPaths = new LinkedHashMap<>();
-        Map<String, Path> metaPaths = new HashMap<>();
         try {
             Path store = store();
 
+            Map<String, Map<String, Triple<String, Path, Path>>> versions = new HashMap<>();
             try (Stream<Path> files = Files.list(store)) {
-                files.forEach(path -> {
-                    String name = path.getFileName().toString();
-                    if (name.endsWith(METADATA_EXTENSION)) {
-                        metaPaths.put(name.substring(0, name.length() - METADATA_EXTENSION.length()), path);
-                    } else {
-                        nonMetaPaths.put(name, path);
+                files.forEach(folder -> {
+                    String hash = folder.getFileName().toString();
+
+                    try {
+                        Map<String, Path> nonMetaPaths = new HashMap<>();
+                        Map<String, Path> metaPaths = new HashMap<>();
+
+                        try (Stream<Path> folderFiles = Files.list(folder)) {
+                            folderFiles.forEach(file -> {
+                                String fileName = file.getFileName().toString();
+                                if (file.endsWith(METADATA_EXTENSION)) {
+                                    metaPaths.put(fileName.substring(0, fileName.length() - METADATA_EXTENSION.length()), file);
+                                } else {
+                                    nonMetaPaths.put(fileName, file);
+                                }
+                            });
+                        }
+
+                        for (Map.Entry<String, Path> entry : metaPaths.entrySet()) {
+                            if (!nonMetaPaths.containsKey(entry.getKey())) {
+                                // Orphan metadata file
+                                Files.delete(entry.getValue());
+                            }
+                        }
+
+                        Map<String, Triple<String, Path, Path>> artifacts = new LinkedHashMap<>();
+                        for (Map.Entry<String, Path> entry : nonMetaPaths.entrySet()) {
+                            String fileName = entry.getKey();
+                            Path file = entry.getValue();
+                            Path metaFile = metaPaths.get(fileName);
+                            if (metaFile == null) {
+                                // Orphan main file
+                                Files.delete(file);
+                                continue;
+                            }
+
+                            WorkflowFileMetadata metadata = Downloader.OBJECT_MAPPER.readValue(Files.newInputStream(metaFile), WorkflowFileMetadata.class);
+                            artifacts.put(metadata.identifier, Triple.of(fileName, file, metaFile));
+                        }
+
+                        versions.put(hash, artifacts);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
                     }
                 });
             }
 
-            for (Map.Entry<String, Path> entry : metaPaths.entrySet()) {
-                if (!nonMetaPaths.containsKey(entry.getKey())) {
-                    // Orphan metadata file
-                    Files.delete(entry.getValue());
-                }
-            }
-
-            Map<String, Triple<String, Path, Path>> versions = new LinkedHashMap<>();
-            for (Map.Entry<String, Path> entry : nonMetaPaths.entrySet()) {
-                String fileName = entry.getKey();
-                Path file = entry.getValue();
-                Path metaFile = metaPaths.get(fileName);
-                if (metaFile == null) {
-                    // Orphan main file
-                    Files.delete(file);
-                    continue;
-                }
-
-                WorkflowFileMetadata metadata = Downloader.OBJECT_MAPPER.readValue(Files.newInputStream(metaFile), WorkflowFileMetadata.class);
-                versions.put(metadata.hash, Triple.of(fileName, file, metaFile));
-            }
-
             for (int i = 0; i < Math.min(workflowRuns.size(), config.versionsToKeep); i++) {
                 WorkflowRun run = workflowRuns.get(i);
-                Triple<String, Path, Path> diskVersion = versions.remove(run.head_sha);
+                String hash = run.head_sha;
+                Path versionStore = store.resolve(hash);
+                if (!Files.exists(versionStore)) {
+                    Files.createDirectories(versionStore);
+                }
+
+                Map<String, Triple<String, Path, Path>> diskVersion = versions.remove(hash);
                 if (diskVersion != null) {
-                    String fileName = diskVersion.getLeft();
-                    Path folder = diskVersion.getMiddle();
-                    Path metaFile = diskVersion.getRight();
-
-                    // TODO
-
                     Map<String, Artifact> artifacts = new HashMap<>();
-                    try (Stream<Path> files = Files.list(folder)) {
-                        for (Path file : files.collect(Collectors.toList())) {
-                            byte[] bytes = null;
-                            if (i < config.versionsToKeepInMemory) {
-                                bytes = Files.readAllBytes(file);
-                            }
+
+                    for (VersionArtifactConfig artifactConfig : config.artifacts) {
+                        String artifactIdentifier = artifactConfig.identifier;
+
+                        Triple<String, Path, Path> artifact = diskVersion.remove(artifactIdentifier);
+                        if (artifact == null) {
+                            continue;
                         }
+
+                        String fileName = artifact.getLeft();
+                        Path file = artifact.getMiddle();
+                        Path metaFile = artifact.getRight();
+
+                        byte[] bytes = null;
+                        if (i < config.versionsToKeepInMemory) {
+                            bytes = Files.readAllBytes(file);
+                        }
+
+                        artifacts.put(artifactIdentifier, new Artifact(fileName, file, metaFile, bytes));
                     }
 
-                    // TODO
-                    //putVersion(run.head_sha, fileName, file, bytes);
+                    putVersion(new Version(hash, artifacts));
                     continue;
                 }
 
@@ -189,13 +219,117 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         return;
                     }
 
-                    // TODO: dl
+                    WorkflowArtifactPaging artifactPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowArtifactPaging.class);
+                    if (artifactPaging == null) {
+                        Downloader.LOGGER.error("Failed to get workflow artifacts for " + describe()
+                                                        + " " + run.head_sha + ": failed to parse json");
+                        continue;
+                    }
+
+                    Map<String, Artifact> artifactsByIdentifier = new LinkedHashMap<>();
+
+                    List<byte[]> zips = new ArrayList<>();
+
+                    for (WorkflowArtifact artifact : artifactPaging.artifacts) {
+                        boolean any = false;
+
+                        for (VersionArtifactConfig artifactConfig : config.artifacts) {
+                            if (!artifact.expired && Pattern.compile(artifactConfig.archiveNameFormat).matcher(artifact.name).matches()) {
+                                any = true;
+                                break;
+                            }
+                        }
+
+                        if (!any) {
+                            continue;
+                        }
+
+                        Request downloadRequest = new Request.Builder()
+                                .url(artifact.archive_download_url)
+                                .get().build();
+
+                        try (Response downloadResponse = downloader.httpClient().newCall(downloadRequest).execute()) {
+                            ResponseBody responseBody = downloadResponse.body();
+                            if (!downloadResponse.isSuccessful() || responseBody == null) {
+                                Downloader.LOGGER.error(
+                                        "Failed to download artifact " + artifact.name + " for " + describe() + " " + hash + ": "
+                                                + (responseBody != null ? responseBody.string() : "(No body)"));
+                                break;
+                            }
+
+                            zips.add(responseBody.bytes());
+                        } catch (IOException e) {
+                            Downloader.LOGGER.error("Failed to download artifact " + artifact.name + " for " + describe() + " " + hash);
+                        }
+                    }
+
+                    List<VersionArtifactConfig> availableConfigs = new ArrayList<>(config.artifacts);
+                    for (byte[] zip : zips) {
+                        try (ZipInputStream inputStream = new ZipInputStream(new ByteArrayInputStream(zip))) {
+                            ZipEntry zipEntry;
+                            while ((zipEntry = inputStream.getNextEntry()) != null) {
+                                Path resolvedPath = versionStore.resolve(zipEntry.getName()).normalize();
+                                if (!resolvedPath.startsWith(versionStore)) {
+                                    throw new RuntimeException("Entry with an illegal path: " + zipEntry.getName());
+                                }
+
+                                String fileName = resolvedPath.getFileName().toString();
+
+                                boolean found = false;
+                                for (VersionArtifactConfig artifactConfig : availableConfigs) {
+                                    String identifier = artifactConfig.identifier;
+
+                                    if (!Pattern.compile(artifactConfig.fileNameFormat).matcher(fileName).matches()) {
+                                        continue;
+                                    }
+
+                                    byte[] bytes;
+                                    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                                        IOUtils.copy(inputStream, outputStream);
+                                        bytes = outputStream.toByteArray();
+                                    }
+
+                                    Path file = versionStore.resolve(fileName);
+                                    Path metaFile = versionStore.resolve(fileName + METADATA_EXTENSION);
+
+                                    Files.write(file, bytes);
+                                    Downloader.OBJECT_MAPPER.writeValue(
+                                            Files.newOutputStream(metaFile),
+                                            new WorkflowFileMetadata(identifier)
+                                    );
+
+                                    artifactsByIdentifier.put(
+                                            identifier,
+                                            new Artifact(
+                                                    fileName,
+                                                    file,
+                                                    metaFile,
+                                                    i < config.versionsToKeepInMemory ? bytes : null
+                                            )
+                                    );
+
+                                    availableConfigs.remove(artifactConfig);
+                                    found = true;
+                                    break;
+                                }
+
+                                if (!found) {
+                                    Downloader.LOGGER.info("Found no use for file " + fileName + " for " + describe() + " " + hash);
+                                }
+                            }
+                        }
+                    }
+
+                    putVersion(new Version(hash, artifactsByIdentifier));
                 }
             }
 
-            for (Triple<String, Path, Path> value : versions.values()) {
-                Files.delete(value.getMiddle());
-                Files.delete(value.getRight());
+            // Remove files that aren't needed (anymore)
+            for (Map<String, Triple<String, Path, Path>> value : versions.values()) {
+                for (Triple<String, Path, Path> triple : value.values()) {
+                    Files.delete(triple.getMiddle());
+                    Files.delete(triple.getRight());
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

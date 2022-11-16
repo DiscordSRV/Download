@@ -65,8 +65,8 @@ public class Downloader {
                     Request.Builder builder = request.newBuilder()
                             .removeHeader("User-Agent")
                             .addHeader("User-Agent", "DiscordSRVDownloader/2");
-                    if (request.url().host().equals("github.com")) {
-                        // TODO: auth
+                    if (request.url().host().endsWith("github.com") && StringUtils.isNotEmpty(config.githubToken)) {
+                        builder.addHeader("Authorization", "Bearer " + config.githubToken);
                     }
 
                     return chain.proceed(builder.build());
@@ -114,7 +114,7 @@ public class Downloader {
         }
 
         for (VersionChannel versionChannel : versionChannels) {
-            VersionChannelConfig config = versionChannel.config();
+            VersionChannelConfig config = versionChannel.getConfig();
             if (config.repoOwner.equalsIgnoreCase(repoOwner)
                     && config.repoName.equalsIgnoreCase(repoName)
                     && config.name.equalsIgnoreCase(name)) {

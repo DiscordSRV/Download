@@ -39,10 +39,9 @@ public abstract class AbstractVersionChannel implements VersionChannel {
             try (Stream<Path> pathStream = Files.list(store)) {
                 toDelete = pathStream
                         .filter(path -> versions.values().stream()
-                                .noneMatch(ver -> path.equals(ver.getMetaFile())
-                                        || ver.getArtifactsByIdentifier().values()
+                                .noneMatch(ver -> ver.getArtifactsByIdentifier().values()
                                             .stream()
-                                            .anyMatch(art -> path.equals(art.getFile()))
+                                            .anyMatch(art -> path.equals(art.getFile()) || path.equals(art.getMetaFile()))
                                 )
                         )
                         .collect(Collectors.toList());
@@ -69,7 +68,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected Path store() throws IOException {
-        Path path = Paths.get("storage", config.name);
+        Path path = Paths.get("storage", config.repoOwner, config.repoName, config.name);
         if (!Files.exists(path)) {
             Files.createDirectories(path);
         }
@@ -81,7 +80,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     @Override
-    public VersionChannelConfig config() {
+    public VersionChannelConfig getConfig() {
         return config;
     }
 

@@ -111,10 +111,10 @@ public class ReleaseChannel extends AbstractVersionChannel {
                     bytes = Files.readAllBytes(file);
                 }
 
-                artifacts.put(artifactId, new Artifact(fileName, file, bytes));
+                artifacts.put(artifactId, new Artifact(fileName, file, null, bytes));
             }
 
-            putVersion(new Version(release.tag_name, null, artifacts));
+            putVersion(new Version(release.tag_name, artifacts));
         } catch (IOException e) {
             Downloader.LOGGER.error("Failed to load release " + release.tag_name + " for " + describe(), e);
         }

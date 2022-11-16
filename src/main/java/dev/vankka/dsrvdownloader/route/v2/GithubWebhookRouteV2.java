@@ -24,7 +24,6 @@ public class GithubWebhookRouteV2 {
         this.downloader = downloader;
     }
 
-    @SuppressWarnings("UastIncorrectHttpHeaderInspection")
     @GetMapping("/v2/{repoOwner}/{repoName}/github-webhook/{route}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void handle(
@@ -62,7 +61,7 @@ public class GithubWebhookRouteV2 {
 
         JsonNode node = Downloader.OBJECT_MAPPER.readTree(body);
         for (VersionChannel versionChannel : downloader.versionChannels()) {
-            VersionChannelConfig config = versionChannel.config();
+            VersionChannelConfig config = versionChannel.getConfig();
             if (config.repoOwner.equalsIgnoreCase(repoOwner) && config.repoName.equalsIgnoreCase(repoName)) {
                 versionChannel.receiveWebhook(event, node);
             }
