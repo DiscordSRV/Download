@@ -1,5 +1,6 @@
 package dev.vankka.dsrvdownloader.model.channel;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
@@ -20,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 public class ReleaseChannel extends AbstractVersionChannel {
@@ -42,23 +44,23 @@ public class ReleaseChannel extends AbstractVersionChannel {
                 .get().build();
 
         try (Response response = downloader.httpClient().newCall(request).execute()) {
-            if (!response.isSuccessful()) {
+            ResponseBody body = response.body();
+            if (!response.isSuccessful() || body == null) {
+                Downloader.LOGGER.error(
+                        "Failed to get releases for " + describe() + " (" + request.url() + "): "
+                                + (body != null ? body.string() : "(No body)"));
                 return;
             }
 
-            ResponseBody body = response.body();
-            if (body != null) {
-                releases = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), new TypeReference<>(){});
-            }
+            releases = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), new TypeReference<>(){});
         } catch (IOException e) {
             Downloader.LOGGER.error("Failed to get releases for repository " + repo(), e);
         }
     }
 
     private void includeRelease(Release release, boolean inMemory) {
-        Path store;
         try {
-            store = store();
+            Path store = store();
 
             Map<String, Release.Asset> assets = new HashMap<>();
 
@@ -93,7 +95,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
                         ResponseBody body = response.body();
                         if (!response.isSuccessful() || body == null) {
                             Downloader.LOGGER.error(
-                                    "Failed to download " + fileName + " for " + describe() + ": "
+                                    "Failed to download " + fileName + " for " + describe() + " (" + request.url() + "): "
                                             + response.code() + ": " + (body != null ? body.string() : "(No body)"));
                             return;
                         }
@@ -139,6 +141,34 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
     @Override
     public void receiveWebhook(String event, JsonNode node) {
+        if (!event.equals("release") || !node.get("action").asText().equals("published")) {
+            return;
+        }
 
+        Release release;
+        try {
+            release = Downloader.OBJECT_MAPPER.readValue(node.get("release").toString(), Release.class);
+        } catch (JsonProcessingException e) {
+            Downloader.LOGGER.error("Failed to parse release json", e);
+            return;
+        }
+
+        includeRelease(release, config.versionsToKeepInMemory >= 1);
+        releases.add(0, release);
+
+        int versionsToKeep = config.versionsToKeep;
+        if (releases.size() > versionsToKeep) {
+            Release remove = releases.remove(versionsToKeep - 1);
+            if (remove == null) {
+                return;
+            }
+
+            Version version = versions.remove(remove.tag_name);
+            if (version == null) {
+                return;
+            }
+
+            version.expireIn(System.currentTimeMillis() + EXPIRE_AFTER);
+        }
     }
 }

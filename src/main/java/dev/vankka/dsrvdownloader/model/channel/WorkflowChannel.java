@@ -1,5 +1,6 @@
 package dev.vankka.dsrvdownloader.model.channel;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionArtifactConfig;
@@ -55,7 +56,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 ResponseBody body = response.body();
                 if (!response.isSuccessful() || body == null) {
                     Downloader.LOGGER.error(
-                            "Failed to get workflows for " + describe() + ": "
+                            "Failed to get workflows for " + describe() + " (" + request.url() + "): "
                                     + (body != null ? body.string() : "(No body)"));
                     return;
                 }
@@ -95,7 +96,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 ResponseBody body = response.body();
                 if (!response.isSuccessful() || body == null) {
                     Downloader.LOGGER.error(
-                            "Failed to get workflow runs for " + describe() + ": "
+                            "Failed to get workflow runs for " + describe() + " (" + request.url() + "): "
                                     + (body != null ? body.string() : "(No body)"));
                     return;
                 }
@@ -173,10 +174,6 @@ public class WorkflowChannel extends AbstractVersionChannel {
             for (int i = 0; i < Math.min(workflowRuns.size(), config.versionsToKeep); i++) {
                 WorkflowRun run = workflowRuns.get(i);
                 String hash = run.head_sha;
-                Path versionStore = store.resolve(hash);
-                if (!Files.exists(versionStore)) {
-                    Files.createDirectories(versionStore);
-                }
 
                 Map<String, Triple<String, Path, Path>> diskVersion = versions.remove(hash);
                 if (diskVersion != null) {
@@ -206,122 +203,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                     continue;
                 }
 
-                Request request = new Request.Builder()
-                        .url(baseRepoApiUrl() + "/actions/runs/" + Long.toUnsignedString(run.id) + "/artifacts")
-                        .get().build();
-
-                try (Response response = downloader.httpClient().newCall(request).execute()) {
-                    ResponseBody body = response.body();
-                    if (!response.isSuccessful() || body == null) {
-                        Downloader.LOGGER.error(
-                                "Failed to get workflow artifacts for " + describe() + " " + run.head_sha + ": "
-                                        + (body != null ? body.string() : "(No body)"));
-                        return;
-                    }
-
-                    WorkflowArtifactPaging artifactPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowArtifactPaging.class);
-                    if (artifactPaging == null) {
-                        Downloader.LOGGER.error("Failed to get workflow artifacts for " + describe()
-                                                        + " " + run.head_sha + ": failed to parse json");
-                        continue;
-                    }
-
-                    Map<String, Artifact> artifactsByIdentifier = new LinkedHashMap<>();
-
-                    List<byte[]> zips = new ArrayList<>();
-
-                    for (WorkflowArtifact artifact : artifactPaging.artifacts) {
-                        boolean any = false;
-
-                        for (VersionArtifactConfig artifactConfig : config.artifacts) {
-                            if (!artifact.expired && Pattern.compile(artifactConfig.archiveNameFormat).matcher(artifact.name).matches()) {
-                                any = true;
-                                break;
-                            }
-                        }
-
-                        if (!any) {
-                            continue;
-                        }
-
-                        Request downloadRequest = new Request.Builder()
-                                .url(artifact.archive_download_url)
-                                .get().build();
-
-                        try (Response downloadResponse = downloader.httpClient().newCall(downloadRequest).execute()) {
-                            ResponseBody responseBody = downloadResponse.body();
-                            if (!downloadResponse.isSuccessful() || responseBody == null) {
-                                Downloader.LOGGER.error(
-                                        "Failed to download artifact " + artifact.name + " for " + describe() + " " + hash + ": "
-                                                + (responseBody != null ? responseBody.string() : "(No body)"));
-                                break;
-                            }
-
-                            zips.add(responseBody.bytes());
-                        } catch (IOException e) {
-                            Downloader.LOGGER.error("Failed to download artifact " + artifact.name + " for " + describe() + " " + hash);
-                        }
-                    }
-
-                    List<VersionArtifactConfig> availableConfigs = new ArrayList<>(config.artifacts);
-                    for (byte[] zip : zips) {
-                        try (ZipInputStream inputStream = new ZipInputStream(new ByteArrayInputStream(zip))) {
-                            ZipEntry zipEntry;
-                            while ((zipEntry = inputStream.getNextEntry()) != null) {
-                                Path resolvedPath = versionStore.resolve(zipEntry.getName()).normalize();
-                                if (!resolvedPath.startsWith(versionStore)) {
-                                    throw new RuntimeException("Entry with an illegal path: " + zipEntry.getName());
-                                }
-
-                                String fileName = resolvedPath.getFileName().toString();
-
-                                boolean found = false;
-                                for (VersionArtifactConfig artifactConfig : availableConfigs) {
-                                    String identifier = artifactConfig.identifier;
-
-                                    if (!Pattern.compile(artifactConfig.fileNameFormat).matcher(fileName).matches()) {
-                                        continue;
-                                    }
-
-                                    byte[] bytes;
-                                    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-                                        IOUtils.copy(inputStream, outputStream);
-                                        bytes = outputStream.toByteArray();
-                                    }
-
-                                    Path file = versionStore.resolve(fileName);
-                                    Path metaFile = versionStore.resolve(fileName + METADATA_EXTENSION);
-
-                                    Files.write(file, bytes);
-                                    Downloader.OBJECT_MAPPER.writeValue(
-                                            Files.newOutputStream(metaFile),
-                                            new WorkflowFileMetadata(identifier)
-                                    );
-
-                                    artifactsByIdentifier.put(
-                                            identifier,
-                                            new Artifact(
-                                                    fileName,
-                                                    file,
-                                                    metaFile,
-                                                    i < config.versionsToKeepInMemory ? bytes : null
-                                            )
-                                    );
-
-                                    availableConfigs.remove(artifactConfig);
-                                    found = true;
-                                    break;
-                                }
-
-                                if (!found) {
-                                    Downloader.LOGGER.info("Found no use for file " + fileName + " for " + describe() + " " + hash);
-                                }
-                            }
-                        }
-                    }
-
-                    putVersion(new Version(hash, artifactsByIdentifier));
-                }
+                includeRun(run, i < config.versionsToKeepInMemory);
             }
 
             // Remove files that aren't needed (anymore)
@@ -333,6 +215,144 @@ public class WorkflowChannel extends AbstractVersionChannel {
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private void includeRun(WorkflowRun run, boolean inMemory) {
+        String hash = run.head_sha;
+
+        try {
+            Path versionStore = store().resolve(hash);
+
+            Request request = new Request.Builder()
+                    .url(baseRepoApiUrl() + "/actions/runs/" + Long.toUnsignedString(run.id) + "/artifacts")
+                    .get().build();
+
+            WorkflowArtifactPaging artifactPaging;
+            try (Response response = downloader.httpClient().newCall(request).execute()) {
+                ResponseBody body = response.body();
+                if (!response.isSuccessful() || body == null) {
+                    Downloader.LOGGER.error(
+                            "Failed to get workflow artifacts for " + describe() + " " + hash + " (" + request.url() + "): "
+                                    + (body != null ? body.string() : "(No body)"));
+                    return;
+                }
+
+                artifactPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowArtifactPaging.class);
+            }
+
+            if (artifactPaging == null) {
+                Downloader.LOGGER.error("Failed to get workflow artifacts for " + describe()
+                                                + " " + hash + ": failed to parse json");
+                return;
+            }
+
+            Map<String, Artifact> artifactsByIdentifier = new LinkedHashMap<>();
+
+            List<byte[]> zips = new ArrayList<>();
+
+            for (WorkflowArtifact artifact : artifactPaging.artifacts) {
+                boolean any = false;
+
+                for (VersionArtifactConfig artifactConfig : config.artifacts) {
+                    if (!artifact.expired && Pattern.compile(artifactConfig.archiveNameFormat).matcher(artifact.name).matches()) {
+                        any = true;
+                        break;
+                    }
+                }
+
+                if (!any) {
+                    continue;
+                }
+
+                Request downloadRequest = new Request.Builder()
+                        .url(artifact.archive_download_url)
+                        .get().build();
+
+                try (Response downloadResponse = downloader.httpClient().newCall(downloadRequest).execute()) {
+                    ResponseBody responseBody = downloadResponse.body();
+                    if (!downloadResponse.isSuccessful() || responseBody == null) {
+                        Downloader.LOGGER.error(
+                                "Failed to download artifact " + artifact.name + " for " + describe() + " " + hash + ": "
+                                        + (responseBody != null ? responseBody.string() : "(No body)"));
+                        break;
+                    }
+
+                    zips.add(responseBody.bytes());
+                } catch (IOException e) {
+                    Downloader.LOGGER.error("Failed to download artifact " + artifact.name + " for " + describe() + " " + hash);
+                }
+            }
+
+            List<VersionArtifactConfig> availableConfigs = new ArrayList<>(config.artifacts);
+            for (byte[] zip : zips) {
+                try (ZipInputStream inputStream = new ZipInputStream(new ByteArrayInputStream(zip))) {
+                    ZipEntry zipEntry;
+                    while ((zipEntry = inputStream.getNextEntry()) != null) {
+                        Path resolvedPath = versionStore.resolve(zipEntry.getName()).normalize();
+                        if (!resolvedPath.startsWith(versionStore)) {
+                            throw new RuntimeException("Entry with an illegal path: " + zipEntry.getName());
+                        }
+
+                        String fileName = resolvedPath.getFileName().toString();
+
+                        boolean found = false;
+                        for (VersionArtifactConfig artifactConfig : availableConfigs) {
+                            String identifier = artifactConfig.identifier;
+
+                            if (!Pattern.compile(artifactConfig.fileNameFormat).matcher(fileName).matches()) {
+                                continue;
+                            }
+
+                            byte[] bytes;
+                            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                                IOUtils.copy(inputStream, outputStream);
+                                bytes = outputStream.toByteArray();
+                            }
+
+                            Path file = versionStore.resolve(fileName);
+                            Path metaFile = versionStore.resolve(fileName + METADATA_EXTENSION);
+
+                            if (!Files.exists(versionStore)) {
+                                Files.createDirectories(versionStore);
+                            }
+
+                            Files.write(file, bytes);
+                            Downloader.OBJECT_MAPPER.writeValue(
+                                    Files.newOutputStream(metaFile),
+                                    new WorkflowFileMetadata(identifier)
+                            );
+
+                            artifactsByIdentifier.put(
+                                    identifier,
+                                    new Artifact(
+                                            fileName,
+                                            file,
+                                            metaFile,
+                                            inMemory ? bytes : null
+                                    )
+                            );
+
+                            availableConfigs.remove(artifactConfig);
+                            found = true;
+                            break;
+                        }
+
+                        if (!found) {
+                            Downloader.LOGGER.info("Found no use for file " + fileName + " for " + describe() + " " + hash);
+                        }
+                    }
+                }
+            }
+            if (artifactsByIdentifier.isEmpty()) {
+                Downloader.LOGGER.error(
+                        "Failed to find any files matching for workflow run " + hash + " for " + describe());
+                return;
+            }
+
+            putVersion(new Version(hash, artifactsByIdentifier));
+        } catch (IOException e) {
+            Downloader.LOGGER.error("Failed to load workflow run " + hash + " for " + describe(), e);
         }
     }
 
@@ -348,6 +368,41 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
     @Override
     public void receiveWebhook(String event, JsonNode node) {
+        if (!event.equals("workflow_run")
+                || !node.get("action").asText().equals("completed")
+                || workflow == null || node.get("workflow_run").get("workflow_id").asLong() != workflow.id) {
+            return;
+        }
 
+        WorkflowRun workflowRun;
+        try {
+            workflowRun = Downloader.OBJECT_MAPPER.readValue(node.get("workflow_run").toString(), WorkflowRun.class);
+        } catch (JsonProcessingException e) {
+            Downloader.LOGGER.error("Failed to parse workflow run json", e);
+            return;
+        }
+        if (!workflowRun.status.equals("success")
+                || !workflowRun.head_branch.equals(config.branch)
+                || !workflowRun.event.equals("push")) {
+            return;
+        }
+
+        includeRun(workflowRun, config.versionsToKeepInMemory >= 1);
+        workflowRuns.add(workflowRun);
+
+        int versionsToKeep = config.versionsToKeep;
+        if (versions.size() > versionsToKeep) {
+            WorkflowRun remove = workflowRuns.get(versionsToKeep - 1);
+            if (remove == null) {
+                return;
+            }
+
+            Version version = versions.remove(remove.head_sha);
+            if (version == null) {
+                return;
+            }
+
+            version.expireIn(System.currentTimeMillis() + EXPIRE_AFTER);
+        }
     }
 }

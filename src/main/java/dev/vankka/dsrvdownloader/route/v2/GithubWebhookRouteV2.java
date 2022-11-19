@@ -6,6 +6,7 @@ import dev.vankka.dsrvdownloader.config.RepoConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -24,14 +25,17 @@ public class GithubWebhookRouteV2 {
         this.downloader = downloader;
     }
 
-    @GetMapping("/v2/{repoOwner}/{repoName}/github-webhook/{route}")
+    @PostMapping(
+            path = "/v2/{repoOwner}/{repoName}/github-webhook/{route}",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void handle(
             @PathVariable String repoOwner,
             @PathVariable String repoName,
             @PathVariable String route,
-            @RequestHeader("X-Hub-Signature-256") String signature,
-            @RequestHeader("X-GitHub-Event") String event,
+            @RequestHeader(name = "X-Hub-Signature-256") String signature,
+            @RequestHeader(name = "X-GitHub-Event") String event,
             @RequestBody byte[] body
     ) throws Exception {
         RepoConfig repoConfig = null;
@@ -71,8 +75,8 @@ public class GithubWebhookRouteV2 {
     private byte[] hmac256(byte[] secretKey, byte[] message) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec sks = new SecretKeySpec(secretKey, "HmacSHA256");
-            mac.init(sks);
+            SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey, "HmacSHA256");
+            mac.init(secretKeySpec);
             return mac.doFinal(message);
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             Downloader.LOGGER.error("Failed to get hmac for github webhook body", e);

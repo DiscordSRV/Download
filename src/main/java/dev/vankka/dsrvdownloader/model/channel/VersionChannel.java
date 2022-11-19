@@ -6,9 +6,11 @@ import dev.vankka.dsrvdownloader.model.Version;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public interface VersionChannel {
 
+    long EXPIRE_AFTER = TimeUnit.HOURS.toMillis(2);
     String LATEST_IDENTIFIER = "latest";
 
     Map<String, Version> versionsByIdentifier();
