@@ -22,6 +22,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -357,13 +358,20 @@ public class WorkflowChannel extends AbstractVersionChannel {
     }
 
     @Override
-    public int versionsBehind(String comparedTo) throws IllegalArgumentException {
+    public int versionsBehind(String comparedTo, Consumer<String> versionConsumer) {
         for (int i = 0; i < workflowRuns.size(); i++) {
-            if (workflowRuns.get(i).head_sha.equals(comparedTo)) {
+            String headSha = workflowRuns.get(i).head_sha;
+            versionConsumer.accept(headSha);
+            if (headSha.equals(comparedTo)) {
                 return i;
             }
         }
-        throw new IllegalArgumentException();
+        return -1;
+    }
+
+    @Override
+    protected String amountType() {
+        return "builds";
     }
 
     @Override

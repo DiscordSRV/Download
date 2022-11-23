@@ -17,13 +17,13 @@ import org.apache.commons.io.IOUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 public class ReleaseChannel extends AbstractVersionChannel {
+
+    private static final int RELEASES_PER_PAGE = 100;
 
     private List<Release> releases;
 
@@ -38,22 +38,35 @@ public class ReleaseChannel extends AbstractVersionChannel {
     }
 
     private void updateReleases() {
-        Request request = new Request.Builder()
-                .url(baseRepoApiUrl() + "/releases")
-                .get().build();
+        releases = new ArrayList<>();
 
-        try (Response response = downloader.httpClient().newCall(request).execute()) {
-            ResponseBody body = response.body();
-            if (!response.isSuccessful() || body == null) {
-                Downloader.LOGGER.error(
-                        "Failed to get releases for " + describe() + " (" + request.url() + "): "
-                                + (body != null ? body.string() : "(No body)"));
+        int page = 1;
+        while (true) {
+            Request request = new Request.Builder()
+                    .url(baseRepoApiUrl() + "/releases?page=" + page + "&per_page=" + RELEASES_PER_PAGE)
+                    .get().build();
+
+            try (Response response = downloader.httpClient().newCall(request).execute()) {
+                ResponseBody body = response.body();
+                if (!response.isSuccessful() || body == null) {
+                    Downloader.LOGGER.error(
+                            "Failed to get releases for " + describe() + " (" + request.url() + "): "
+                                    + (body != null ? body.string() : "(No body)"));
+                    return;
+                }
+
+                List<Release> currentReleases = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), new TypeReference<>(){});
+                releases.addAll(currentReleases);
+
+                if (currentReleases.size() < RELEASES_PER_PAGE) {
+                    break;
+                }
+            } catch (IOException e) {
+                Downloader.LOGGER.error("Failed to get releases for repository " + repo(), e);
                 return;
             }
 
-            releases = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), new TypeReference<>(){});
-        } catch (IOException e) {
-            Downloader.LOGGER.error("Failed to get releases for repository " + repo(), e);
+            page++;
         }
     }
 
@@ -129,13 +142,20 @@ public class ReleaseChannel extends AbstractVersionChannel {
     }
 
     @Override
-    public int versionsBehind(String comparedTo) throws IllegalArgumentException {
+    public int versionsBehind(String comparedTo, Consumer<String> versionConsumer) {
         for (int i = 0; i < releases.size(); i++) {
-            if (releases.get(i).tag_name.equals(comparedTo)) {
+            String tagName = releases.get(i).tag_name;
+            versionConsumer.accept(tagName);
+            if (tagName.equals(comparedTo)) {
                 return i;
             }
         }
-        throw new IllegalArgumentException();
+        return -1;
+    }
+
+    @Override
+    protected String amountType() {
+        return "versions";
     }
 
     @Override

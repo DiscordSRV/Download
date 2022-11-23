@@ -3,6 +3,7 @@ package dev.vankka.dsrvdownloader.model.channel;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.Version;
+import dev.vankka.dsrvdownloader.model.VersionCheck;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.Map;
@@ -16,7 +17,7 @@ public interface VersionChannel {
     Map<String, Version> versionsByIdentifier();
     String getUrl(HttpServletRequest request);
     String versionResponse(HttpServletRequest request, boolean preferIdentifier);
-    int versionsBehind(String comparedTo) throws IllegalArgumentException;
+    VersionCheck checkVersion(String comparedTo);
     void receiveWebhook(String event, JsonNode node);
 
     VersionChannelConfig getConfig();

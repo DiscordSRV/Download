@@ -11,6 +11,7 @@ public class VersionChannelConfig {
     public int versionsToKeep;
     public int versionsToKeepInMemory;
     public List<VersionArtifactConfig> artifacts;
+    public List<SecurityConfig> security;
 
     // Workflows only
     public String branch;

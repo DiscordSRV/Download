@@ -3,19 +3,21 @@ package dev.vankka.dsrvdownloader.model.channel;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.Downloader;
+import dev.vankka.dsrvdownloader.config.SecurityConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
+import dev.vankka.dsrvdownloader.model.VersionCheck;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -103,6 +105,59 @@ public abstract class AbstractVersionChannel implements VersionChannel {
 
         return host + "/v2/" + repo() + "/" + config.name;
     }
+
+    private void securityCheck(
+            List<String> securityFailures,
+            AtomicBoolean vulnerability,
+            List<SecurityConfig> securityConfigs,
+            Predicate<SecurityConfig> check
+    ) {
+        for (SecurityConfig securityConfig : securityConfigs) {
+            if (check.test(securityConfig)) {
+                securityFailures.add(securityConfig.securityFailReason);
+                if (securityConfig.vulnerability) {
+                    vulnerability.set(true);
+                }
+            }
+        }
+    }
+
+    @Override
+    public VersionCheck checkVersion(String comparedTo) {
+        List<String> securityFailures = new ArrayList<>();
+        AtomicBoolean vulnerability = new AtomicBoolean(false);
+        List<SecurityConfig> securityConfigs = config.security != null ? config.security : Collections.emptyList();
+
+        securityCheck(securityFailures, vulnerability, securityConfigs, config -> config.versionIdentifier.equals(comparedTo));
+
+        int versionsBehind = versionsBehind(comparedTo, version ->
+                securityCheck(securityFailures, vulnerability, securityConfigs, config -> {
+                    String prefix = "<=";
+                    String versionIdentifier = config.versionIdentifier;
+                    return versionIdentifier.startsWith(prefix) && version.equals(versionIdentifier.substring(prefix.length()));
+                })
+        );
+
+        VersionCheck versionCheck = new VersionCheck();
+        if (versionsBehind == -1) {
+            versionCheck.status = VersionCheck.Status.UNKNOWN;
+        } else {
+            versionCheck.status = versionsBehind == 0
+                                  ? VersionCheck.Status.UP_TO_DATE
+                                  : VersionCheck.Status.OUTDATED;
+        }
+        versionCheck.amount = versionsBehind;
+        versionCheck.amountSource = VersionCheck.AmountSource.GITHUB;
+        versionCheck.amountType = amountType();
+
+        versionCheck.securityIssues = securityFailures;
+        versionCheck.insecure = vulnerability.get();
+
+        return versionCheck;
+    }
+
+    protected abstract int versionsBehind(String comparedTo, Consumer<String> versionConsumer);
+    protected abstract String amountType();
 
     @Override
     public String versionResponse(HttpServletRequest request, boolean preferIdentifier) {

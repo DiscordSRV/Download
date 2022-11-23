@@ -32,12 +32,6 @@ public class VersionCheckRouteV2 {
         VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
-        try {
-            int behind = channel.versionsBehind(identifier);
-
-            return ResponseEntity.ok().body(String.valueOf(behind));// TODO: more advanced response
-        } catch (IllegalArgumentException ignored) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        }
+        return ResponseEntity.ok().body(channel.checkVersion(identifier));
     }
 }
