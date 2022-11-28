@@ -21,16 +21,19 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.12.0'
 
     // JSON
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.4'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0'
 
     // okhttp
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 
+    // Discord webhooks
+    implementation 'club.minnced:discord-webhooks:0.8.2'
+
     // SLF4J logging impl
-    implementation 'org.slf4j:slf4j-simple:2.0.0'
+    implementation 'org.slf4j:slf4j-simple:2.0.4'
 
     // v1 json
-    implementation 'org.json:json:20220320'
+    implementation 'org.json:json:20220924'
 }
 
 jar {

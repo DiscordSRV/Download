@@ -6,12 +6,14 @@ import java.util.Map;
 public class Version {
 
     private final String identifier;
+    private final String description;
     private final Map<String, Artifact> artifactsByIdentifier;
     private final Map<String, Artifact> artifactsByFileName;
     private Long expiry;
 
-    public Version(String identifier, Map<String, Artifact> artifactsByIdentifier) {
+    public Version(String identifier, String description, Map<String, Artifact> artifactsByIdentifier) {
         this.identifier = identifier;
+        this.description = description;
         this.artifactsByIdentifier = artifactsByIdentifier;
         Map<String, Artifact> artifactsByFileName = new HashMap<>();
         for (Artifact artifact : artifactsByIdentifier.values()) {
@@ -22,6 +24,10 @@ public class Version {
 
     public String getIdentifier() {
         return identifier;
+    }
+
+    public String getDescription() {
+        return description;
     }
 
     public Map<String, Artifact> getArtifactsByIdentifier() {

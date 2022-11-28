@@ -8,6 +8,7 @@ import java.util.List;
 public class Release {
 
     public String tag_name;
+    public String name;
     public List<Asset> assets;
 
     @JsonIgnoreProperties(ignoreUnknown = true)

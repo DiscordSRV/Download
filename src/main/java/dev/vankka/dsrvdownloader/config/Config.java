@@ -6,7 +6,7 @@ public class Config {
 
     public List<VersionChannelConfig> versionChannels;
     public List<RepoConfig> repos;
-    public int port;
     public String githubToken;
+    public String discordWebhookUrl;
 
 }

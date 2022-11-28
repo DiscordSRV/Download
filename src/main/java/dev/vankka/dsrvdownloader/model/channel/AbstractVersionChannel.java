@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.SecurityConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
+import dev.vankka.dsrvdownloader.discord.DiscordMessage;
+import dev.vankka.dsrvdownloader.discord.DiscordWebhook;
+import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.VersionCheck;
@@ -15,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -23,14 +27,18 @@ import java.util.stream.Stream;
 
 public abstract class AbstractVersionChannel implements VersionChannel {
 
-    protected final Downloader downloader;
+    protected final ConfigManager configManager;
+    protected final DiscordWebhook discordWebhook;
     protected final VersionChannelConfig config;
     protected final Map<String, Version> versions;
+    protected final Map<String, DiscordMessage> messages;
 
-    public AbstractVersionChannel(Downloader downloader, VersionChannelConfig config) {
-        this.downloader = downloader;
+    public AbstractVersionChannel(ConfigManager configManager, DiscordWebhook discordWebhook, VersionChannelConfig config) {
+        this.configManager = configManager;
+        this.discordWebhook = discordWebhook;
         this.config = config;
         this.versions = new LinkedHashMap<>();
+        this.messages = new ConcurrentHashMap<>();
     }
 
     protected void cleanupDirectory() {
@@ -77,8 +85,11 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         return path;
     }
 
-    protected void putVersion(Version version) {
+    protected void putVersion(Version version, boolean newVersion) {
         versions.put(version.getIdentifier(), version);
+        if (newVersion) {
+            newVersionAvailable(version);
+        }
     }
 
     @Override
@@ -173,13 +184,13 @@ public abstract class AbstractVersionChannel implements VersionChannel {
             ObjectNode objectNode = versions.addObject();
             objectNode.put("identifier", version.getIdentifier());
 
-            ObjectNode artifacts = objectNode.with("artifacts");
+            ObjectNode artifacts = objectNode.withObject("artifacts");
 
             for (Map.Entry<String, Artifact> artifactEntry : version.getArtifactsByIdentifier().entrySet()) {
                 String artifactIdentifier = artifactEntry.getKey();
                 Artifact artifact = artifactEntry.getValue();
 
-                ObjectNode artifactNode = artifacts.with(artifactEntry.getKey());
+                ObjectNode artifactNode = artifacts.withObject(artifactEntry.getKey());
                 artifactNode.put("file_name", artifact.getFileName());
                 artifactNode.put("size", artifact.getSize());
                 artifactNode.put("download_url", baseUrl + version.getIdentifier() + "/"
@@ -189,5 +200,47 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         }
 
         return response.toString();
+    }
+
+    protected void processing(String identifier, String description) {
+        setDiscordMessage(identifier, "\uD83D\uDD01 Processing `" + identifier + "` "
+                + "(`" + description + "`) [`" + describe() + "`]", null);
+    }
+
+    protected void failed(String identifier, String description, String failReason) {
+        failed(identifier, description, failReason, null);
+    }
+
+    protected void failed(String identifier, String description, String failReason, String longerMessage) {
+        setLastDiscordMessage(identifier, "❌ Failed to include `" + identifier + "` "
+                + "(`" + description + "`) because: \"" + failReason + "\" [`" + describe() + "`]", longerMessage);
+    }
+
+    protected void success(String identifier, String description) {
+        setLastDiscordMessage(identifier, "✅ Successfully included `" + identifier + "` "
+                + "(`" + description + "`) [`" + describe() + "`]", null);
+    }
+
+    protected void newVersionAvailable(Version version) {
+        setLastDiscordMessage(version.getIdentifier(), "\uD83D\uDCE5 New version "
+                + "`" + version.getIdentifier() + "` "
+                + "(`" + version.getDescription() + "`) is available on channel `" + describe() + "`", null);
+    }
+
+    private void setDiscordMessage(String identifier, String message, String longerMessage) {
+        discordWebhook.processMessage(
+                messages.computeIfAbsent(identifier, key -> new DiscordMessage())
+                        .setMessage(message, longerMessage)
+        );
+    }
+
+    private void setLastDiscordMessage(String identifier, String message, String longerMessage) {
+        DiscordMessage discordMessage = messages.remove(identifier);
+        if (discordMessage == null) {
+            discordWebhook.processMessage(new DiscordMessage().setMessage(message, longerMessage));
+            return;
+        }
+
+        discordWebhook.processMessage(discordMessage.setMessage(message, longerMessage));
     }
 }

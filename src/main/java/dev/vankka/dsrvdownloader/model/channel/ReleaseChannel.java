@@ -6,9 +6,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionArtifactConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
+import dev.vankka.dsrvdownloader.discord.DiscordWebhook;
+import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
+import dev.vankka.dsrvdownloader.model.exception.InclusionException;
 import dev.vankka.dsrvdownloader.model.github.Release;
+import dev.vankka.dsrvdownloader.util.HttpContentUtil;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -27,8 +31,8 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
     private List<Release> releases;
 
-    public ReleaseChannel(Downloader downloader, VersionChannelConfig config) {
-        super(downloader, config);
+    public ReleaseChannel(ConfigManager configManager, DiscordWebhook discordWebhook, VersionChannelConfig config) {
+        super(configManager, discordWebhook, config);
         updateReleases();
         if (releases == null || releases.isEmpty()) {
             return;
@@ -46,12 +50,12 @@ public class ReleaseChannel extends AbstractVersionChannel {
                     .url(baseRepoApiUrl() + "/releases?page=" + page + "&per_page=" + RELEASES_PER_PAGE)
                     .get().build();
 
-            try (Response response = downloader.httpClient().newCall(request).execute()) {
+            try (Response response = configManager.httpClient().newCall(request).execute()) {
                 ResponseBody body = response.body();
                 if (!response.isSuccessful() || body == null) {
                     Downloader.LOGGER.error(
                             "Failed to get releases for " + describe() + " (" + request.url() + "): "
-                                    + (body != null ? body.string() : "(No body)"));
+                                    + HttpContentUtil.prettify(response, body));
                     return;
                 }
 
@@ -70,74 +74,73 @@ public class ReleaseChannel extends AbstractVersionChannel {
         }
     }
 
-    private void includeRelease(Release release, boolean inMemory) {
-        try {
-            Path store = store();
+    private void includeRelease(Release release, boolean inMemory, boolean newVersion)
+            throws IOException, RuntimeException, InclusionException {
+        Path store = store();
 
-            Map<String, Release.Asset> assets = new HashMap<>();
+        Map<String, Release.Asset> assets = new HashMap<>();
 
-            for (Release.Asset releaseAsset : release.assets) {
-                for (VersionArtifactConfig artifact : config.artifacts) {
-                    if (Pattern.compile(artifact.fileNameFormat).matcher(releaseAsset.name).matches()) {
-                        assets.put(artifact.identifier, releaseAsset);
-                    }
+        for (Release.Asset releaseAsset : release.assets) {
+            for (VersionArtifactConfig artifact : config.artifacts) {
+                if (Pattern.compile(artifact.fileNameFormat).matcher(releaseAsset.name).matches()) {
+                    assets.put(artifact.identifier, releaseAsset);
                 }
             }
-            if (assets.isEmpty()) {
-                Downloader.LOGGER.error(
-                        "Failed to find any files matching for release " + release.tag_name + " for " + describe());
-                return;
-            }
-
-            Map<String, Artifact> artifacts = new LinkedHashMap<>();
-            for (Map.Entry<String, Release.Asset> entry : assets.entrySet()) {
-                String artifactId = entry.getKey();
-                Release.Asset asset = entry.getValue();
-
-                String fileName = asset.name;
-                Path file = store.resolve(fileName);
-
-                byte[] bytes = null;
-                if (!Files.exists(file)) {
-                    Request request = new Request.Builder()
-                            .url(asset.browser_download_url)
-                            .get().build();
-
-                    try (Response response = downloader.httpClient().newCall(request).execute()) {
-                        ResponseBody body = response.body();
-                        if (!response.isSuccessful() || body == null) {
-                            Downloader.LOGGER.error(
-                                    "Failed to download " + fileName + " for " + describe() + " (" + request.url() + "): "
-                                            + response.code() + ": " + (body != null ? body.string() : "(No body)"));
-                            return;
-                        }
-
-                        Files.createFile(file);
-
-                        if (inMemory) {
-                            bytes = body.bytes();
-                            Files.write(file, bytes);
-                        } else {
-                            IOUtils.copy(body.byteStream(), Files.newOutputStream(file));
-                        }
-                    }
-                } else if (inMemory) {
-                    bytes = Files.readAllBytes(file);
-                }
-
-                artifacts.put(artifactId, new Artifact(fileName, file, null, bytes));
-            }
-
-            putVersion(new Version(release.tag_name, artifacts));
-        } catch (IOException e) {
-            Downloader.LOGGER.error("Failed to load release " + release.tag_name + " for " + describe(), e);
         }
+        if (assets.isEmpty()) {
+            throw new InclusionException("Failed to find any files matching for release");
+        }
+
+        Map<String, Artifact> artifacts = new LinkedHashMap<>();
+        for (Map.Entry<String, Release.Asset> entry : assets.entrySet()) {
+            String artifactId = entry.getKey();
+            Release.Asset asset = entry.getValue();
+
+            String fileName = asset.name;
+            Path file = store.resolve(fileName);
+
+            byte[] bytes = null;
+            if (!Files.exists(file)) {
+                Request request = new Request.Builder()
+                        .url(asset.browser_download_url)
+                        .get().build();
+
+                try (Response response = configManager.httpClient().newCall(request).execute()) {
+                    ResponseBody body = response.body();
+                    if (!response.isSuccessful() || body == null) {
+                        throw new InclusionException(
+                                "Failed to download " + fileName,
+                                request.url() + " => " + HttpContentUtil.prettify(response, body));
+                    }
+
+                    Files.createFile(file);
+
+                    if (inMemory) {
+                        bytes = body.bytes();
+                        Files.write(file, bytes);
+                    } else {
+                        IOUtils.copy(body.byteStream(), Files.newOutputStream(file));
+                    }
+                }
+            } else if (inMemory) {
+                bytes = Files.readAllBytes(file);
+            }
+
+            artifacts.put(artifactId, new Artifact(fileName, file, null, bytes));
+        }
+
+        putVersion(new Version(release.tag_name, release.name, artifacts), newVersion);
     }
 
     private void loadFiles() {
         int max = Math.min(config.versionsToKeep, releases.size());
         for (int i = 0; i < max; i++) {
-            includeRelease(releases.get(i), config.versionsToKeepInMemory > i);
+            Release release = releases.get(i);
+            try {
+                includeRelease(release, config.versionsToKeepInMemory > i, false);
+            } catch (IOException | InclusionException e) {
+                Downloader.LOGGER.error("Failed to include release " + release.tag_name + " for " + describe(), e);
+            }
         }
     }
 
@@ -158,9 +161,10 @@ public class ReleaseChannel extends AbstractVersionChannel {
         return "versions";
     }
 
+    private static final Set<String> ACCEPTABLE_ACTIONS = new HashSet<>(Arrays.asList("created", "released"));
     @Override
     public void receiveWebhook(String event, JsonNode node) {
-        if (!event.equals("release") || !node.get("action").asText().equals("published")) {
+        if (!event.equals("release")) {
             return;
         }
 
@@ -172,8 +176,29 @@ public class ReleaseChannel extends AbstractVersionChannel {
             return;
         }
 
-        includeRelease(release, config.versionsToKeepInMemory >= 1);
+        String action = node.get("action").asText();
+        if (!ACCEPTABLE_ACTIONS.contains(action)) {
+            return;
+        }
+
+        if (!action.equals("released")) {
+            processing(release.tag_name, release.name);
+            return;
+        }
+
         releases.add(0, release);
+
+        try {
+            try {
+                includeRelease(release, config.versionsToKeepInMemory >= 1, true);
+            } catch (IOException e) {
+                throw new InclusionException(e);
+            }
+
+            success(release.tag_name, release.name);
+        } catch (InclusionException e) {
+            failed(release.tag_name, release.name, e.getMessage(), e.getLonger());
+        }
 
         int versionsToKeep = config.versionsToKeep;
         if (releases.size() > versionsToKeep) {

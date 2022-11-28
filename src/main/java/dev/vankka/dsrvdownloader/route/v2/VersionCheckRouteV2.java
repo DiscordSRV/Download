@@ -1,6 +1,6 @@
 package dev.vankka.dsrvdownloader.route.v2;
 
-import dev.vankka.dsrvdownloader.Downloader;
+import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -13,10 +13,10 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 public class VersionCheckRouteV2 {
 
-    private final Downloader downloader;
+    private final ChannelManager channelManager;
 
-    public VersionCheckRouteV2(Downloader downloader) {
-        this.downloader = downloader;
+    public VersionCheckRouteV2(ChannelManager channelManager) {
+        this.channelManager = channelManager;
     }
 
     @GetMapping(
@@ -29,7 +29,7 @@ public class VersionCheckRouteV2 {
             @PathVariable String releaseChannel,
             @PathVariable String identifier
     ) {
-        VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
+        VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
         return ResponseEntity.ok().body(channel.checkVersion(identifier));

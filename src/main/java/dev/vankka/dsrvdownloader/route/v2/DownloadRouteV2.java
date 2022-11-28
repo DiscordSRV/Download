@@ -1,6 +1,6 @@
 package dev.vankka.dsrvdownloader.route.v2;
 
-import dev.vankka.dsrvdownloader.Downloader;
+import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
@@ -23,10 +23,10 @@ import java.util.Map;
 @RestController
 public class DownloadRouteV2 {
 
-    private final Downloader downloader;
+    private final ChannelManager channelManager;
 
-    public DownloadRouteV2(Downloader downloader) {
-        this.downloader = downloader;
+    public DownloadRouteV2(ChannelManager channelManager) {
+        this.channelManager = channelManager;
     }
 
     @RequestMapping(
@@ -42,7 +42,7 @@ public class DownloadRouteV2 {
             @RequestParam(name = "preferRedirect", defaultValue = "true") boolean preferRedirect,
             HttpServletRequest request
     ) throws Exception {
-        VersionChannel channel = downloader.getChannel(repoOwner, repoName, releaseChannel)
+        VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
         Map<String, Version> versions = channel.versionsByIdentifier();

@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.RepoConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
+import dev.vankka.dsrvdownloader.manager.ChannelManager;
+import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -19,10 +22,13 @@ import java.security.NoSuchAlgorithmException;
 @RestController
 public class GithubWebhookRouteV2 {
 
-    private final Downloader downloader;
+    private final ConfigManager configManager;
+    private final ChannelManager channelManager;
 
-    public GithubWebhookRouteV2(Downloader downloader) {
-        this.downloader = downloader;
+    @Autowired
+    public GithubWebhookRouteV2(ConfigManager configManager, ChannelManager channelManager) {
+        this.configManager = configManager;
+        this.channelManager = channelManager;
     }
 
     @PostMapping(
@@ -39,7 +45,7 @@ public class GithubWebhookRouteV2 {
             @RequestBody byte[] body
     ) throws Exception {
         RepoConfig repoConfig = null;
-        for (RepoConfig repo : downloader.config().repos) {
+        for (RepoConfig repo : configManager.config().repos) {
             if (repo.repoOwner.equalsIgnoreCase(repoOwner) && repo.repoName.equalsIgnoreCase(repoName)) {
                 repoConfig = repo;
                 break;
@@ -64,7 +70,7 @@ public class GithubWebhookRouteV2 {
         }
 
         JsonNode node = Downloader.OBJECT_MAPPER.readTree(body);
-        for (VersionChannel versionChannel : downloader.versionChannels()) {
+        for (VersionChannel versionChannel : channelManager.versionChannels()) {
             VersionChannelConfig config = versionChannel.getConfig();
             if (config.repoOwner.equalsIgnoreCase(repoOwner) && config.repoName.equalsIgnoreCase(repoName)) {
                 versionChannel.receiveWebhook(event, node);
