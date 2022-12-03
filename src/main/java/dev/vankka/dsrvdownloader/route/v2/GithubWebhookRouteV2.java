@@ -7,6 +7,7 @@ import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
+import dev.vankka.dsrvdownloader.util.Hex;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -64,7 +65,7 @@ public class GithubWebhookRouteV2 {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        String requiredSignature = "sha256=" + hex(bytes);
+        String requiredSignature = "sha256=" + Hex.toHexString(bytes);
         if (!requiredSignature.equals(signature)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
@@ -90,19 +91,4 @@ public class GithubWebhookRouteV2 {
         }
     }
 
-    private static final char[] HEX_CHARACTERS = "0123456789abcdef".toCharArray();
-    private String hex(byte[] bytes) {
-        try {
-            char[] hexChars = new char[bytes.length * 2];
-            for (int j = 0, v; j < bytes.length; j++) {
-                v = bytes[j] & 0xFF;
-                hexChars[j * 2] = HEX_CHARACTERS[v >>> 4];
-                hexChars[j * 2 + 1] = HEX_CHARACTERS[v & 0x0F];
-            }
-            return new String(hexChars);
-        } catch (Exception e) {
-            Downloader.LOGGER.error("Failed to convert byte[] to hex for github webhook signature", e);
-            return null;
-        }
-    }
 }

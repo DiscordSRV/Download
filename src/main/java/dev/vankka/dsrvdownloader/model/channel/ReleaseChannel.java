@@ -12,15 +12,20 @@ import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.exception.InclusionException;
 import dev.vankka.dsrvdownloader.model.github.Release;
+import dev.vankka.dsrvdownloader.util.Hex;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
+import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import org.apache.commons.io.IOUtils;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -75,7 +80,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
     }
 
     private void includeRelease(Release release, boolean inMemory, boolean newVersion)
-            throws IOException, RuntimeException, InclusionException {
+            throws IOException, RuntimeException, InclusionException, DigestException, NoSuchAlgorithmException {
         Path store = store();
 
         Map<String, Release.Asset> assets = new HashMap<>();
@@ -100,6 +105,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             Path file = store.resolve(fileName);
 
             byte[] bytes = null;
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
             if (!Files.exists(file)) {
                 Request request = new Request.Builder()
                         .url(asset.browser_download_url)
@@ -115,18 +121,33 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
                     Files.createFile(file);
 
-                    if (inMemory) {
-                        bytes = body.bytes();
-                        Files.write(file, bytes);
-                    } else {
-                        IOUtils.copy(body.byteStream(), Files.newOutputStream(file));
+                    try (IO io = new IO(body.byteStream())
+                            .withDigest(digest)
+                            .withOutputStream(Files.newOutputStream(file))
+                    ) {
+                        if (inMemory) {
+                            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                            io.withOutputStream(byteStream).stream();
+
+                            bytes = byteStream.toByteArray();
+                        } else {
+                            io.stream();
+                        }
                     }
                 }
             } else if (inMemory) {
-                bytes = Files.readAllBytes(file);
+                try (IO io = new IO(Files.newInputStream(file))
+                        .withDigest(digest)
+                        .withOutputStream(Files.newOutputStream(file))
+                ) {
+                    io.stream();
+                }
             }
 
-            artifacts.put(artifactId, new Artifact(fileName, file, null, bytes));
+            artifacts.put(
+                    artifactId,
+                    new Artifact(fileName, file, null, bytes, Hex.toHexString(digest.digest()))
+            );
         }
 
         putVersion(new Version(release.tag_name, release.name, artifacts), newVersion);
@@ -138,7 +159,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             Release release = releases.get(i);
             try {
                 includeRelease(release, config.versionsToKeepInMemory > i, false);
-            } catch (IOException | InclusionException e) {
+            } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
                 Downloader.LOGGER.error("Failed to include release " + release.tag_name + " for " + describe(), e);
             }
         }
@@ -191,7 +212,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
         try {
             try {
                 includeRelease(release, config.versionsToKeepInMemory >= 1, true);
-            } catch (IOException e) {
+            } catch (IOException | DigestException | NoSuchAlgorithmException e) {
                 throw new InclusionException(e);
             }
 

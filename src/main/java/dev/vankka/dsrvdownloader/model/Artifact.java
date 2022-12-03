@@ -13,19 +13,22 @@ public class Artifact {
     private final Path file;
     private final Path metaFile;
     private byte[] content;
+    private final String sha256;
 
     public Artifact(
             String fileName,
             Path file,
             @Nullable Path metaFile,
-            @Nullable byte[] content
+            @Nullable byte[] content,
+            String sha256
     ) throws IOException {
         this(
                 fileName,
                 content != null ? content.length : Files.size(file),
                 metaFile,
                 file,
-                content
+                content,
+                sha256
         );
     }
 
@@ -34,13 +37,15 @@ public class Artifact {
             long size,
             Path file,
             @Nullable Path metaFile,
-            @Nullable byte[] content
+            @Nullable byte[] content,
+            String sha256
     ) {
         this.fileName = fileName;
         this.size = size;
         this.file = file;
         this.metaFile = metaFile;
         this.content = content;
+        this.sha256 = sha256;
     }
 
     public String getFileName() {
@@ -62,6 +67,10 @@ public class Artifact {
     @Nullable
     public byte[] getContent() {
         return content;
+    }
+
+    public String getSha256() {
+        return sha256;
     }
 
     public void removeFromMemory() {

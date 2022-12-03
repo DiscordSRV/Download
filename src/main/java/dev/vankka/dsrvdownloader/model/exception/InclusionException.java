@@ -2,14 +2,12 @@ package dev.vankka.dsrvdownloader.model.exception;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 
-import java.io.IOException;
-
 public class InclusionException extends Exception {
 
     private String longer;
 
-    public InclusionException(IOException e) {
-        super("I/O Exception", e);
+    public InclusionException(Exception e) {
+        super(e.getClass().getSimpleName(), e);
         this.longer = ExceptionUtils.getStackTrace(e);
     }
 

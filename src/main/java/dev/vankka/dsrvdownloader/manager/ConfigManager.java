@@ -36,7 +36,10 @@ public class ConfigManager {
                     Request.Builder builder = request.newBuilder()
                             .removeHeader("User-Agent")
                             .addHeader("User-Agent", "DiscordSRVDownloader/2");
-                    if (request.url().host().endsWith("github.com") && StringUtils.isNotEmpty(config.githubToken)) {
+
+                    String host = request.url().host();
+                    if ((host.equals("github.com") || host.equals("api.github.com"))
+                            && StringUtils.isNotEmpty(config.githubToken)) {
                         builder.addHeader("Authorization", "Bearer " + config.githubToken);
                     }
 

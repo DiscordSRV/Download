@@ -30,6 +30,10 @@ public class DiscordWebhook {
     }
 
     public void processMessage(DiscordMessage message) {
+        if (messages.contains(message)) {
+            return;
+        }
+
         messages.offer(message);
     }
 

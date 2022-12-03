@@ -12,11 +12,12 @@ import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.WorkflowFileMetadata;
 import dev.vankka.dsrvdownloader.model.exception.InclusionException;
 import dev.vankka.dsrvdownloader.model.github.*;
+import dev.vankka.dsrvdownloader.util.Hex;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
+import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.tuple.Triple;
 
 import java.io.ByteArrayInputStream;
@@ -25,6 +26,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -201,7 +205,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                             bytes = Files.readAllBytes(file);
                         }
 
-                        artifacts.put(artifactIdentifier, new Artifact(fileName, file, metaFile, bytes));
+                        artifacts.put(artifactIdentifier, new Artifact(fileName, file, metaFile, bytes, null)); // TODO
                     }
 
                     putVersion(new Version(hash, run.head_commit != null ? run.head_commit.message : null, artifacts), false);
@@ -210,7 +214,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
                 try {
                     includeRun(run, i < config.versionsToKeepInMemory, false);
-                } catch (IOException | InclusionException e) {
+                } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
                     Downloader.LOGGER.error("Failed to include " + run.head_sha + " for " + describe(), e);
                 }
             }
@@ -227,7 +231,8 @@ public class WorkflowChannel extends AbstractVersionChannel {
         }
     }
 
-    private void includeRun(WorkflowRun run, boolean inMemory, boolean newVersion) throws IOException, InclusionException {
+    private void includeRun(WorkflowRun run, boolean inMemory, boolean newVersion)
+            throws IOException, InclusionException, DigestException, NoSuchAlgorithmException {
         String hash = run.head_sha;
         Path versionStore = store().resolve(hash);
 
@@ -306,12 +311,6 @@ public class WorkflowChannel extends AbstractVersionChannel {
                             continue;
                         }
 
-                        byte[] bytes;
-                        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-                            IOUtils.copy(inputStream, outputStream);
-                            bytes = outputStream.toByteArray();
-                        }
-
                         Path file = versionStore.resolve(fileName);
                         Path metaFile = versionStore.resolve(fileName + METADATA_EXTENSION);
 
@@ -319,7 +318,23 @@ public class WorkflowChannel extends AbstractVersionChannel {
                             Files.createDirectories(versionStore);
                         }
 
-                        Files.write(file, bytes);
+                        byte[] bytes = null;
+                        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+                        try (IO io = new IO(inputStream, false)
+                                .withDigest(digest)
+                                .withOutputStream(Files.newOutputStream(file))
+                        ) {
+                            if (inMemory) {
+                                ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                                io.withOutputStream(byteStream).stream();
+
+                                bytes = byteStream.toByteArray();
+                            } else {
+                                io.stream();
+                            }
+                        }
+
                         Downloader.OBJECT_MAPPER.writeValue(
                                 Files.newOutputStream(metaFile),
                                 new WorkflowFileMetadata(identifier)
@@ -331,7 +346,8 @@ public class WorkflowChannel extends AbstractVersionChannel {
                                         fileName,
                                         file,
                                         metaFile,
-                                        inMemory ? bytes : null
+                                        inMemory ? bytes : null,
+                                        Hex.toHexString(digest.digest())
                                 )
                         );
 
@@ -406,7 +422,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         try {
             try {
                 includeRun(workflowRun, config.versionsToKeepInMemory >= 1, true);
-            } catch (IOException e) {
+            } catch (IOException | DigestException | NoSuchAlgorithmException e) {
                 throw new InclusionException(e);
             }
 

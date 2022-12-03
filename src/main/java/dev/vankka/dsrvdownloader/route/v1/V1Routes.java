@@ -1,5 +1,6 @@
 package dev.vankka.dsrvdownloader.route.v1;
 
+import dev.vankka.dsrvdownloader.util.Hex;
 import org.apache.commons.io.IOUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -71,7 +72,7 @@ public class V1Routes {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
             }
 
-            String signature = "sha256=" + hex(bytes);
+            String signature = "sha256=" + Hex.toHexString(bytes);
             if (!signature.equals(signatureHeader)) {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
             }
@@ -178,22 +179,6 @@ public class V1Routes {
             mac.init(sks);
             return mac.doFinal(message);
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private String hex(byte[] bytes) {
-        try {
-            final char[] hexArray = "0123456789abcdef".toCharArray();
-            char[] hexChars = new char[bytes.length * 2];
-            for (int j = 0, v; j < bytes.length; j++) {
-                v = bytes[j] & 0xFF;
-                hexChars[j * 2] = hexArray[v >>> 4];
-                hexChars[j * 2 + 1] = hexArray[v & 0x0F];
-            }
-            return new String(hexChars);
-        } catch (Exception e) {
             e.printStackTrace();
             return null;
         }
