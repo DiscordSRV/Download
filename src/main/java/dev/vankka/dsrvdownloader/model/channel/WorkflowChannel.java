@@ -12,18 +12,19 @@ import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.WorkflowFileMetadata;
 import dev.vankka.dsrvdownloader.model.exception.InclusionException;
 import dev.vankka.dsrvdownloader.model.github.*;
-import dev.vankka.dsrvdownloader.util.Hex;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
 import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.apache.commons.lang3.tuple.Triple;
+import org.apache.tomcat.util.buf.HexUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.DigestException;
@@ -143,7 +144,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         try (Stream<Path> folderFiles = Files.list(folder)) {
                             folderFiles.forEach(file -> {
                                 String fileName = file.getFileName().toString();
-                                if (file.endsWith(METADATA_EXTENSION)) {
+                                if (fileName.endsWith(METADATA_EXTENSION)) {
                                     metaPaths.put(fileName.substring(0, fileName.length() - METADATA_EXTENSION.length()), file);
                                 } else {
                                     nonMetaPaths.put(fileName, file);
@@ -200,12 +201,29 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         Path file = artifact.getMiddle();
                         Path metaFile = artifact.getRight();
 
+                        MessageDigest digest = MessageDigest.getInstance("SHA-256");
                         byte[] bytes = null;
-                        if (i < config.versionsToKeepInMemory) {
-                            bytes = Files.readAllBytes(file);
+                        try (IO io = new IO(Files.newInputStream(file)).withDigest(digest)) {
+                            if (i < config.versionsToKeepInMemory) {
+                                ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                                io.withOutputStream(byteStream).stream();
+
+                                bytes = Files.readAllBytes(file);
+                            } else {
+                                io.stream();
+                            }
                         }
 
-                        artifacts.put(artifactIdentifier, new Artifact(fileName, file, metaFile, bytes, null)); // TODO
+                        artifacts.put(
+                                artifactIdentifier,
+                                new Artifact(
+                                        fileName,
+                                        file,
+                                        metaFile,
+                                        bytes,
+                                        HexUtils.toHexString(digest.digest())
+                                )
+                        );
                     }
 
                     putVersion(new Version(hash, run.head_commit != null ? run.head_commit.message : null, artifacts), false);
@@ -226,7 +244,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                     Files.delete(triple.getRight());
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | NoSuchAlgorithmException | DigestException e) {
             throw new RuntimeException(e);
         }
     }
@@ -293,7 +311,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
         List<VersionArtifactConfig> availableConfigs = new ArrayList<>(config.artifacts);
         for (byte[] zip : zips) {
-            try (ZipInputStream inputStream = new ZipInputStream(new ByteArrayInputStream(zip))) {
+            try (ZipInputStream inputStream = new ZipInputStream(new ByteArrayInputStream(zip), StandardCharsets.UTF_8)) {
                 ZipEntry zipEntry;
                 while ((zipEntry = inputStream.getNextEntry()) != null) {
                     Path resolvedPath = versionStore.resolve(zipEntry.getName()).normalize();
@@ -347,7 +365,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                                         file,
                                         metaFile,
                                         inMemory ? bytes : null,
-                                        Hex.toHexString(digest.digest())
+                                        HexUtils.toHexString(digest.digest())
                                 )
                         );
 
@@ -412,7 +430,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
             return;
         }
 
-        if (!workflowRun.status.equals("success")) {
+        if (!workflowRun.conclusion.equals("success")) {
             failed(id, description, "[workflow](" + workflowRun.url + ") failure");
             return;
         }

@@ -12,12 +12,12 @@ import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.exception.InclusionException;
 import dev.vankka.dsrvdownloader.model.github.Release;
-import dev.vankka.dsrvdownloader.util.Hex;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
 import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.apache.tomcat.util.buf.HexUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -146,7 +146,13 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
             artifacts.put(
                     artifactId,
-                    new Artifact(fileName, file, null, bytes, Hex.toHexString(digest.digest()))
+                    new Artifact(
+                            fileName,
+                            file,
+                            null,
+                            bytes,
+                            HexUtils.toHexString(digest.digest())
+                    )
             );
         }
 

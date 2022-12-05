@@ -2,10 +2,7 @@ package dev.vankka.dsrvdownloader.util;
 
 import org.apache.commons.io.IOUtils;
 
-import java.io.BufferedInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.security.DigestException;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -16,7 +13,7 @@ public class IO implements AutoCloseable {
     private static final int BUFFER_SIZE = IOUtils.DEFAULT_BUFFER_SIZE;
 
     private final InputStream inputStream;
-    private final boolean autoCloseInput;
+    private boolean autoCloseInput;
     private final List<Con> outputs = new ArrayList<>(3);
     private final List<OutputStream> streams = new ArrayList<>();
 
@@ -30,8 +27,13 @@ public class IO implements AutoCloseable {
     }
 
     public IO withOutputStream(OutputStream outputStream) {
-        streams.add(outputStream);
-        outputs.add((bytes, size) -> outputStream.write(bytes, 0, size));
+        if (!(outputStream instanceof BufferedOutputStream)) {
+            outputStream = new BufferedOutputStream(outputStream, BUFFER_SIZE);
+        }
+
+        OutputStream finalStream = outputStream;
+        streams.add(finalStream);
+        outputs.add((bytes, size) -> finalStream.write(bytes, 0, size));
         return this;
     }
 
@@ -41,22 +43,44 @@ public class IO implements AutoCloseable {
     }
 
     public void stream() throws IOException, DigestException {
+        InputStream stream = inputStream instanceof BufferedInputStream
+                             ? inputStream
+                             : new BufferedInputStream(inputStream, BUFFER_SIZE);
+
         if (!autoCloseInput) {
-            useStream(new BufferedInputStream(inputStream, BUFFER_SIZE));
+            useStream(stream);
             return;
         }
 
-        try (BufferedInputStream buffered = new BufferedInputStream(inputStream, BUFFER_SIZE)) {
-            useStream(buffered);
+        try (InputStream str = stream) {
+            useStream(str);
+        } finally {
+            autoCloseInput = false;
         }
     }
 
-    private void useStream(BufferedInputStream inputStream) throws IOException, DigestException {
-        byte[] buffer = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
+    private void useStream(InputStream inputStream) throws IOException, DigestException {
+        byte[][] arrays = new byte[outputs.size()][];
+        for (int i = 0; i < outputs.size(); i++) {
+            // create a byte array for each output
+            // since some consumers touch the byte array contents
+            arrays[i] = new byte[BUFFER_SIZE];
+        }
+
+        byte[] buffer = new byte[BUFFER_SIZE];
         int size;
-        while ((size = inputStream.read(buffer)) != -1) {
-            for (var output : outputs) {
-                output.accept(buffer, size);
+        while ((size = inputStream.read(buffer)) > 0) {
+            for (int i = 0; i < outputs.size(); i++) {
+                byte[] arr = arrays[i];
+                if (arr.length != size) {
+                    // Resize array if needed
+                    arr = arrays[i] = new byte[size];
+                }
+
+                Con output = outputs.get(i);
+
+                System.arraycopy(buffer, 0, arr, 0, size);
+                output.accept(arr, size);
             }
         }
     }
@@ -66,7 +90,9 @@ public class IO implements AutoCloseable {
         for (OutputStream stream : streams) {
             stream.close();
         }
-        inputStream.close();
+        if (autoCloseInput) {
+            inputStream.close();
+        }
     }
 
     @FunctionalInterface

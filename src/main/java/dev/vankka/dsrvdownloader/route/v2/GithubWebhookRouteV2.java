@@ -7,7 +7,7 @@ import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
-import dev.vankka.dsrvdownloader.util.Hex;
+import org.apache.tomcat.util.buf.HexUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -65,7 +65,7 @@ public class GithubWebhookRouteV2 {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        String requiredSignature = "sha256=" + Hex.toHexString(bytes);
+        String requiredSignature = "sha256=" + HexUtils.toHexString(bytes);
         if (!requiredSignature.equals(signature)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }

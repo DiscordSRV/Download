@@ -1,7 +1,7 @@
 package dev.vankka.dsrvdownloader.route.v1;
 
-import dev.vankka.dsrvdownloader.util.Hex;
 import org.apache.commons.io.IOUtils;
+import org.apache.tomcat.util.buf.HexUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.core.io.InputStreamResource;
@@ -72,7 +72,7 @@ public class V1Routes {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
             }
 
-            String signature = "sha256=" + Hex.toHexString(bytes);
+            String signature = "sha256=" + HexUtils.toHexString(bytes);
             if (!signature.equals(signatureHeader)) {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
             }

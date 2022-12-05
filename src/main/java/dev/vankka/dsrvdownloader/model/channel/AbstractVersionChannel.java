@@ -184,17 +184,20 @@ public abstract class AbstractVersionChannel implements VersionChannel {
             ObjectNode objectNode = versions.addObject();
             objectNode.put("identifier", version.getIdentifier());
 
-            ObjectNode artifacts = objectNode.withObject("artifacts");
+            ObjectNode artifacts = objectNode.putObject("artifacts");
 
             for (Map.Entry<String, Artifact> artifactEntry : version.getArtifactsByIdentifier().entrySet()) {
                 String artifactIdentifier = artifactEntry.getKey();
                 Artifact artifact = artifactEntry.getValue();
 
-                ObjectNode artifactNode = artifacts.withObject(artifactEntry.getKey());
+                ObjectNode artifactNode = artifacts.putObject(artifactEntry.getKey());
                 artifactNode.put("file_name", artifact.getFileName());
                 artifactNode.put("size", artifact.getSize());
                 artifactNode.put("download_url", baseUrl + version.getIdentifier() + "/"
                         + (preferIdentifier ? artifactIdentifier : artifact.getFileName()));
+
+                ObjectNode hashNode = artifactNode.putObject("hashes");
+                hashNode.put("sha256", artifact.getSha256());
             }
 
         }
