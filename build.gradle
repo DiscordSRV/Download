@@ -4,6 +4,9 @@ plugins {
     id 'java'
 }
 
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
 group 'dev.vankka'
 version '1.0'
 

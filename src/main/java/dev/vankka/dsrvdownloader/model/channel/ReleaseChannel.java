@@ -81,7 +81,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
     private void includeRelease(Release release, boolean inMemory, boolean newVersion)
             throws IOException, RuntimeException, InclusionException, DigestException, NoSuchAlgorithmException {
-        Path store = store();
+        Path store = store().resolve(release.tag_name);
 
         Map<String, Release.Asset> assets = new HashMap<>();
 
@@ -94,6 +94,10 @@ public class ReleaseChannel extends AbstractVersionChannel {
         }
         if (assets.isEmpty()) {
             throw new InclusionException("Failed to find any files matching for release");
+        }
+
+        if (!Files.exists(store)) {
+            Files.createDirectory(store);
         }
 
         Map<String, Artifact> artifacts = new LinkedHashMap<>();
@@ -209,10 +213,11 @@ public class ReleaseChannel extends AbstractVersionChannel {
         }
 
         if (!action.equals("released")) {
-            processing(release.tag_name, release.name);
+            waiting(release.tag_name, release.name, "for [release](" + release.html_url + ") to publish");
             return;
         }
 
+        processing(release.tag_name, release.name);
         releases.add(0, release);
 
         try {
@@ -227,19 +232,6 @@ public class ReleaseChannel extends AbstractVersionChannel {
             failed(release.tag_name, release.name, e.getMessage(), e.getLonger());
         }
 
-        int versionsToKeep = config.versionsToKeep;
-        if (releases.size() > versionsToKeep) {
-            Release remove = releases.remove(versionsToKeep - 1);
-            if (remove == null) {
-                return;
-            }
-
-            Version version = versions.remove(remove.tag_name);
-            if (version == null) {
-                return;
-            }
-
-            version.expireIn(System.currentTimeMillis() + EXPIRE_AFTER);
-        }
+        expireOldestVersion();
     }
 }

@@ -25,8 +25,8 @@ public class Artifact {
         this(
                 fileName,
                 content != null ? content.length : Files.size(file),
-                metaFile,
                 file,
+                metaFile,
                 content,
                 sha256
         );

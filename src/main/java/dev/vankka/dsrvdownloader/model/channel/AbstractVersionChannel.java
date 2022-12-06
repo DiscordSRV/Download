@@ -17,8 +17,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -31,13 +35,15 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     protected final DiscordWebhook discordWebhook;
     protected final VersionChannelConfig config;
     protected final Map<String, Version> versions;
+    protected final List<Version> versionsInOrder;
     protected final Map<String, DiscordMessage> messages;
 
     public AbstractVersionChannel(ConfigManager configManager, DiscordWebhook discordWebhook, VersionChannelConfig config) {
         this.configManager = configManager;
         this.discordWebhook = discordWebhook;
         this.config = config;
-        this.versions = new LinkedHashMap<>();
+        this.versions = new ConcurrentHashMap<>();
+        this.versionsInOrder = new CopyOnWriteArrayList<>();
         this.messages = new ConcurrentHashMap<>();
     }
 
@@ -88,7 +94,10 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     protected void putVersion(Version version, boolean newVersion) {
         versions.put(version.getIdentifier(), version);
         if (newVersion) {
+            versionsInOrder.add(0, version);
             newVersionAvailable(version);
+        } else {
+            versionsInOrder.add(version);
         }
     }
 
@@ -176,13 +185,14 @@ public abstract class AbstractVersionChannel implements VersionChannel {
 
         ObjectNode response = Downloader.OBJECT_MAPPER.createObjectNode();
         ArrayNode versions = response.putArray("versions");
-        for (Version version : this.versions.values()) {
+        for (Version version : versionsInOrder) {
             if (version.getExpiry() != null) {
                 continue;
             }
 
             ObjectNode objectNode = versions.addObject();
             objectNode.put("identifier", version.getIdentifier());
+            objectNode.put("description", version.getDescription());
 
             ObjectNode artifacts = objectNode.putObject("artifacts");
 
@@ -199,10 +209,60 @@ public abstract class AbstractVersionChannel implements VersionChannel {
                 ObjectNode hashNode = artifactNode.putObject("hashes");
                 hashNode.put("sha256", artifact.getSha256());
             }
-
         }
 
         return response.toString();
+    }
+
+    protected void expireOldestVersion() {
+        int versionsToKeep = config.versionsToKeep;
+        if (versionsInOrder.size() > versionsToKeep) {
+            Version version = versionsInOrder.get(versionsToKeep);
+            if (version == null) {
+                return;
+            }
+
+            version.expireIn(System.currentTimeMillis() + EXPIRE_AFTER);
+        }
+    }
+
+    @Override
+    public void removeExpiredVersions() {
+        List<Version> versionsToRemove = new ArrayList<>();
+        List<String> identifiersToRemove = new ArrayList<>();
+        long time = System.currentTimeMillis();
+
+        for (Version version : versionsInOrder) {
+            if (version.getExpiry() != null && version.getExpiry() < time) {
+                versionsToRemove.add(version);
+                identifiersToRemove.add(version.getIdentifier());
+            }
+        }
+
+        versionsInOrder.removeAll(versionsToRemove);
+        identifiersToRemove.forEach(versions::remove);
+
+        for (Version version : versionsToRemove) {
+            try {
+                Path parent = null;
+                for (Artifact artifact : version.getArtifactsByIdentifier().values()) {
+                    Path file = artifact.getFile();
+                    Files.delete(file);
+                    Files.deleteIfExists(artifact.getMetaFile());
+                    parent = file.getParent();
+                }
+                if (parent != null && !parent.equals(store())) {
+                    Files.deleteIfExists(parent);
+                }
+            } catch (IOException e) {
+                Downloader.LOGGER.error("Failed to delete expired version " + version.getIdentifier() + " for " + describe(), e);
+            }
+        }
+    }
+
+    protected void waiting(String identifier, String description, String waitReason) {
+        setDiscordMessage(identifier, "\uD83D\uDD51 Waiting for `" + identifier + "` " + waitReason
+                + " (`" + description + "`) [`" + describe() + "`]", null);
     }
 
     protected void processing(String identifier, String description) {
@@ -225,9 +285,10 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected void newVersionAvailable(Version version) {
-        setLastDiscordMessage(version.getIdentifier(), "\uD83D\uDCE5 New version "
-                + "`" + version.getIdentifier() + "` "
-                + "(`" + version.getDescription() + "`) is available on channel `" + describe() + "`", null);
+        discordWebhook.processMessage(new DiscordMessage().setMessage(
+                "\uD83D\uDCE5 New version "
+                        + "`" + version.getIdentifier() + "` "
+                        + "(`" + version.getDescription() + "`) is available [`" + describe() + "`]", null));
     }
 
     private void setDiscordMessage(String identifier, String message, String longerMessage) {

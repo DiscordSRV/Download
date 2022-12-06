@@ -1,4 +1,4 @@
-package dev.vankka.dsrvdownloader.model;
+package dev.vankka.dsrvdownloader.model.github;
 
 public class Commit {
 

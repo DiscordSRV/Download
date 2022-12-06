@@ -31,6 +31,7 @@ import java.security.DigestException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -42,6 +43,9 @@ public class WorkflowChannel extends AbstractVersionChannel {
     private static final String METADATA_EXTENSION = ".metadata";
     private static final int WORKFLOWS_PER_PAGE = 100;
     private static final int WORKFLOWS_RUNS_PER_PAGE = 100;
+
+    private static final int ARTIFACT_REATTEMPTS = 5;
+    private static final long ARTIFACT_REATTEMPT_DELAY = TimeUnit.SECONDS.toMillis(5);
 
     private Workflow workflow;
     private List<WorkflowRun> workflowRuns;
@@ -174,6 +178,11 @@ public class WorkflowChannel extends AbstractVersionChannel {
                             artifacts.put(metadata.identifier, Triple.of(fileName, file, metaFile));
                         }
 
+                        if (artifacts.isEmpty()) {
+                            Files.delete(folder);
+                            return;
+                        }
+
                         versions.put(hash, artifacts);
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -240,8 +249,14 @@ public class WorkflowChannel extends AbstractVersionChannel {
             // Remove files that aren't needed (anymore)
             for (Map<String, Triple<String, Path, Path>> value : versions.values()) {
                 for (Triple<String, Path, Path> triple : value.values()) {
-                    Files.delete(triple.getMiddle());
-                    Files.delete(triple.getRight());
+                    Path file = triple.getMiddle();
+                    Path metaFile = triple.getRight();
+
+                    Files.delete(file);
+                    Files.delete(metaFile);
+
+                    // folder containing the two files
+                    Files.delete(file.getParent());
                 }
             }
         } catch (IOException | NoSuchAlgorithmException | DigestException e) {
@@ -249,6 +264,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         }
     }
 
+    @SuppressWarnings("BusyWait")
     private void includeRun(WorkflowRun run, boolean inMemory, boolean newVersion)
             throws IOException, InclusionException, DigestException, NoSuchAlgorithmException {
         String hash = run.head_sha;
@@ -258,16 +274,36 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 .url(baseRepoApiUrl() + "/actions/runs/" + Long.toUnsignedString(run.id) + "/artifacts")
                 .get().build();
 
-        WorkflowArtifactPaging artifactPaging;
-        try (Response response = configManager.httpClient().newCall(request).execute()) {
-            ResponseBody body = response.body();
-            if (!response.isSuccessful() || body == null) {
-                throw new InclusionException(
-                        "Failed to get workflow artifacts",
-                        request.url() + " => " + HttpContentUtil.prettify(response, body));
+        WorkflowArtifactPaging artifactPaging = null;
+        int attempts = 0;
+        while ((artifactPaging == null || artifactPaging.artifacts.size() == 0) && attempts < ARTIFACT_REATTEMPTS) {
+            try (Response response = configManager.httpClient().newCall(request).execute()) {
+                ResponseBody body = response.body();
+                if (!response.isSuccessful() || body == null) {
+                    throw new InclusionException(
+                            "Failed to get workflow artifacts",
+                            request.url() + " => " + HttpContentUtil.prettify(response, body));
+                }
+
+                artifactPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowArtifactPaging.class);
             }
 
-            artifactPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowArtifactPaging.class);
+            if (artifactPaging == null || !newVersion) {
+                // If we can't parse the json or this is an existing run, break out of the loop
+                break;
+            }
+
+            if (artifactPaging.artifacts.size() == 0) {
+                attempts++;
+                Downloader.LOGGER.warn(
+                        "Retrying getting artifacts for " + describe() + " run "
+                                + Long.toUnsignedString(run.id) + " (Attempts: " + attempts + ")");
+                try {
+                    Thread.sleep(ARTIFACT_REATTEMPT_DELAY);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
 
         if (artifactPaging == null) {
@@ -425,17 +461,25 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
         String id = workflowRun.head_sha;
         String description = workflowRun.head_commit != null ? workflowRun.head_commit.message : null;
-        if (!node.get("action").asText().equals("completed")) {
-            processing(id, description);
+        if (description != null && description.contains("\n")) {
+            description = description.substring(0, description.indexOf("\n"));
+        }
+
+        String action = node.get("action").asText();
+        if (!action.equals("completed")) {
+            if (action.equals("requested")) {
+                waiting(id, description, "[workflow](" + workflowRun.html_url + ") to run");
+            }
             return;
         }
 
         if (!workflowRun.conclusion.equals("success")) {
-            failed(id, description, "[workflow](" + workflowRun.url + ") failure");
+            failed(id, description, "[workflow](" + workflowRun.html_url + ") failure");
             return;
         }
 
-        workflowRuns.add(workflowRun);
+        processing(id, description);
+        workflowRuns.add(0, workflowRun);
 
         try {
             try {
@@ -449,19 +493,6 @@ public class WorkflowChannel extends AbstractVersionChannel {
             failed(id, description, e.getMessage(), e.getLonger());
         }
 
-        int versionsToKeep = config.versionsToKeep;
-        if (versions.size() > versionsToKeep) {
-            WorkflowRun remove = workflowRuns.get(versionsToKeep - 1);
-            if (remove == null) {
-                return;
-            }
-
-            Version version = versions.remove(remove.head_sha);
-            if (version == null) {
-                return;
-            }
-
-            version.expireIn(System.currentTimeMillis() + EXPIRE_AFTER);
-        }
+        expireOldestVersion();
     }
 }

@@ -4,7 +4,8 @@ import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
-import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -16,8 +17,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.ByteArrayInputStream;
-import java.nio.file.Files;
 import java.util.Map;
 
 @RestController
@@ -41,7 +40,7 @@ public class DownloadRouteV2 {
             @PathVariable String artifactIdentifier,
             @RequestParam(name = "preferRedirect", defaultValue = "true") boolean preferRedirect,
             HttpServletRequest request
-    ) throws Exception {
+    ) {
         VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
@@ -83,12 +82,9 @@ public class DownloadRouteV2 {
                 .header("Content-Disposition", "attachment; filename=\"" + artifact.getFileName() + "\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(artifact.getSize())
-                .body(
-                        new InputStreamResource(
-                                content != null
-                                    ? new ByteArrayInputStream(content)
-                                    : Files.newInputStream(artifact.getFile())
-                        )
+                .body(content != null
+                      ? new ByteArrayResource(content)
+                      : new FileSystemResource(artifact.getFile())
                 );
     }
 }

@@ -18,15 +18,13 @@ import java.util.concurrent.*;
 public class DiscordWebhook {
 
     private final Queue<DiscordMessage> messages = new LinkedBlockingDeque<>();
-    private final ConfigManager configManager;
     private final ScheduledExecutorService executorService;
     private final WebhookClient webhookClient;
 
     public DiscordWebhook(ConfigManager configManager) {
-        this.configManager = configManager;
         this.executorService = Executors.newSingleThreadScheduledExecutor();
         this.webhookClient = WebhookClient.withUrl(configManager.config().discordWebhookUrl);
-        executorService.scheduleAtFixedRate(this::processQueue, 1, 5, TimeUnit.SECONDS);
+        executorService.scheduleAtFixedRate(this::processQueue, 1, 1, TimeUnit.SECONDS);
     }
 
     public void processMessage(DiscordMessage message) {

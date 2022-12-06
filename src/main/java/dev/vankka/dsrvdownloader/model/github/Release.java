@@ -7,6 +7,7 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Release {
 
+    public String html_url;
     public String tag_name;
     public String name;
     public List<Asset> assets;

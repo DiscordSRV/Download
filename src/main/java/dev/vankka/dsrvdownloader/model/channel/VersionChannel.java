@@ -19,6 +19,7 @@ public interface VersionChannel {
     String versionResponse(HttpServletRequest request, boolean preferIdentifier);
     VersionCheck checkVersion(String comparedTo);
     void receiveWebhook(String event, JsonNode node);
+    void removeExpiredVersions();
 
     VersionChannelConfig getConfig();
 

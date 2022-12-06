@@ -8,9 +8,13 @@ import dev.vankka.dsrvdownloader.model.channel.WorkflowChannel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -20,27 +24,28 @@ public class ChannelManager {
     private final AtomicBoolean refreshVersionChannels = new AtomicBoolean(false);
     private final ConfigManager configManager;
     private final DiscordWebhook discordWebhook;
+    private final ScheduledExecutorService executorService;
 
     @Autowired
     public ChannelManager(ConfigManager configManager, DiscordWebhook discordWebhook) {
         this.configManager = configManager;
         this.discordWebhook = discordWebhook;
+        this.executorService = Executors.newSingleThreadScheduledExecutor();
         reloadVersionChannels();
+        executorService.scheduleAtFixedRate(() -> {
+            for (VersionChannel versionChannel : versionChannels) {
+                versionChannel.removeExpiredVersions();
+            }
+        }, 1, 1, TimeUnit.MINUTES);
     }
 
     public void reloadVersionChannels() {
         List<VersionChannel> newChannels = new ArrayList<>();
         for (VersionChannelConfig channelConfig : configManager.config().versionChannels) {
-            VersionChannel channel;
-            switch (channelConfig.type) {
-                case RELEASE:
-                    channel = new ReleaseChannel(configManager, discordWebhook, channelConfig);
-                    break;
-                default:
-                case WORKFLOW:
-                    channel = new WorkflowChannel(configManager, discordWebhook, channelConfig);
-                    break;
-            }
+            VersionChannel channel = switch (channelConfig.type) {
+                case RELEASE -> new ReleaseChannel(configManager, discordWebhook, channelConfig);
+                case WORKFLOW -> new WorkflowChannel(configManager, discordWebhook, channelConfig);
+            };
             newChannels.add(channel);
         }
 
@@ -78,5 +83,10 @@ public class ChannelManager {
 
     public List<VersionChannel> versionChannels() {
         return versionChannels;
+    }
+
+    @PreDestroy
+    private void shutdown() {
+        executorService.shutdown();
     }
 }
