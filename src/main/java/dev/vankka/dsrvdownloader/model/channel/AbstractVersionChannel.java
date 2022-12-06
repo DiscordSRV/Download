@@ -180,10 +180,12 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     protected abstract String amountType();
 
     @Override
-    public String versionResponse(HttpServletRequest request, boolean preferIdentifier) {
+    public ObjectNode versionResponse(HttpServletRequest request, boolean preferIdentifier) {
         String baseUrl = getUrl(request) + "/download/";
 
         ObjectNode response = Downloader.OBJECT_MAPPER.createObjectNode();
+        response.put("latest_base_url", baseUrl + "latest/");
+
         ArrayNode versions = response.putArray("versions");
         for (Version version : versionsInOrder) {
             if (version.getExpiry() != null) {
@@ -211,7 +213,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
             }
         }
 
-        return response.toString();
+        return response;
     }
 
     protected void expireOldestVersion() {

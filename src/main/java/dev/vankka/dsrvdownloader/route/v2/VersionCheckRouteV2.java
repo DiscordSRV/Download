@@ -1,10 +1,10 @@
 package dev.vankka.dsrvdownloader.route.v2;
 
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
+import dev.vankka.dsrvdownloader.model.VersionCheck;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,7 +23,7 @@ public class VersionCheckRouteV2 {
             path = "/v2/{repoOwner}/{repoName}/{releaseChannel}/version-check/{identifier}",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public ResponseEntity<?> handle(
+    public VersionCheck handle(
             @PathVariable String repoOwner,
             @PathVariable String repoName,
             @PathVariable String releaseChannel,
@@ -32,6 +32,6 @@ public class VersionCheckRouteV2 {
         VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
-        return ResponseEntity.ok().body(channel.checkVersion(identifier));
+        return channel.checkVersion(identifier);
     }
 }

@@ -1,6 +1,7 @@
 package dev.vankka.dsrvdownloader.model.channel;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.VersionCheck;
@@ -16,7 +17,7 @@ public interface VersionChannel {
 
     Map<String, Version> versionsByIdentifier();
     String getUrl(HttpServletRequest request);
-    String versionResponse(HttpServletRequest request, boolean preferIdentifier);
+    ObjectNode versionResponse(HttpServletRequest request, boolean preferIdentifier);
     VersionCheck checkVersion(String comparedTo);
     void receiveWebhook(String event, JsonNode node);
     void removeExpiredVersions();
