@@ -42,10 +42,17 @@ public class ChannelManager {
     public void reloadVersionChannels() {
         List<VersionChannel> newChannels = new ArrayList<>();
         for (VersionChannelConfig channelConfig : configManager.config().versionChannels) {
-            VersionChannel channel = switch (channelConfig.type) {
-                case RELEASE -> new ReleaseChannel(configManager, discordWebhook, channelConfig);
-                case WORKFLOW -> new WorkflowChannel(configManager, discordWebhook, channelConfig);
-            };
+            VersionChannel channel;
+            switch (channelConfig.type) {
+                case RELEASE:
+                    channel = new ReleaseChannel(configManager, discordWebhook, channelConfig);
+                    break;
+                case WORKFLOW:
+                    channel = new WorkflowChannel(configManager, discordWebhook, channelConfig);
+                    break;
+                default:
+                    continue;
+            }
             newChannels.add(channel);
         }
 

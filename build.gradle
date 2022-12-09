@@ -4,8 +4,8 @@ plugins {
     id 'java'
 }
 
-sourceCompatibility = '17'
-targetCompatibility = '17'
+sourceCompatibility = '11'
+targetCompatibility = '11'
 
 group 'dev.vankka'
 version '1.0'
@@ -15,7 +15,7 @@ repositories {
 }
 
 dependencies {
-    // Spring
+    // Spring (application framework, web server)
     implementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
@@ -23,10 +23,17 @@ dependencies {
     implementation 'commons-io:commons-io:2.11.0'
     implementation 'org.apache.commons:commons-lang3:3.12.0'
 
-    // JSON
+    // Caffeine (Cache)
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.2'
+
+    // Bucket4j (Rate limiting)
+    implementation 'com.bucket4j:bucket4j-core:8.1.1'
+    implementation 'com.bucket4j:bucket4j-caffeine:8.1.1'
+
+    // Jackson (JSON)
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0'
 
-    // okhttp
+    // okhttp (Http requests)
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 
     // Discord webhooks
@@ -35,7 +42,7 @@ dependencies {
     // SLF4J logging impl
     implementation 'org.slf4j:slf4j-simple:2.0.4'
 
-    // v1 json
+    // org.json (v1 routes)
     implementation 'org.json:json:20220924'
 }
 

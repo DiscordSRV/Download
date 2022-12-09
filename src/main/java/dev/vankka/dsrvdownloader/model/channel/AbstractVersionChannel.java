@@ -11,6 +11,7 @@ import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.VersionCheck;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -113,17 +114,8 @@ public abstract class AbstractVersionChannel implements VersionChannel {
 
     @Override
     public String getUrl(HttpServletRequest request) {
-        boolean isHttps = request.isSecure();
-        int port = request.getServerPort();
-        if (port == 0) {
-            port = 80;
-        }
-        String hostName = request.getHeader("X-Forwarded-Host");
-        String host = request.getScheme()
-                + "://" + (hostName != null ? hostName : request.getServerName())
-                + (port == (isHttps ? 443 : 80) ? "" : ":" + port);
-
-        return host + "/v2/" + repo() + "/" + config.name;
+        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString()
+                + "/v2/" + repo() + "/" + config.name;
     }
 
     private void securityCheck(

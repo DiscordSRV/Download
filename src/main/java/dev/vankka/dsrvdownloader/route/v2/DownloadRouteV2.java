@@ -1,9 +1,16 @@
 package dev.vankka.dsrvdownloader.route.v2;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
+import dev.vankka.dsrvdownloader.util.RequestSourceUtil;
+import io.github.bucket4j.Bandwidth;
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.caffeine.CaffeineProxyManager;
+import io.github.bucket4j.distributed.BucketProxy;
+import io.github.bucket4j.distributed.remote.RemoteBucketState;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpStatus;
@@ -17,12 +24,23 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import java.util.Map;
+import java.util.function.Supplier;
 
 @RestController
 public class DownloadRouteV2 {
 
     private final ChannelManager channelManager;
+
+    // 10 downloads per 1 minute
+    @SuppressWarnings("unchecked")
+    private final CaffeineProxyManager<String> downloadRateLimit = new CaffeineProxyManager<>(
+            (Caffeine<String, RemoteBucketState>) (Object) Caffeine.newBuilder(),
+            Duration.ofMinutes(1)
+    );
+    private final Supplier<BucketConfiguration> rateLimitSupplier = () -> BucketConfiguration.builder()
+            .addLimit(Bandwidth.simple(10, Duration.ofMinutes(1))).build();
 
     public DownloadRouteV2(ChannelManager channelManager) {
         this.channelManager = channelManager;
@@ -75,6 +93,13 @@ public class DownloadRouteV2 {
         if (isRedirect && preferRedirect) {
             String url = channel.getUrl(request) + "/download/" + version.getIdentifier() + "/" + artifact.getFileName();
             return new RedirectView(url);
+        }
+
+        String requester = RequestSourceUtil.getRequestSource(request);
+        BucketProxy bucket = downloadRateLimit.builder().build(requester, rateLimitSupplier);
+
+        if (!bucket.tryConsume(1)) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS);
         }
 
         byte[] content = artifact.getContent();
