@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -16,6 +17,8 @@ import java.nio.file.Paths;
 
 @Service
 public class ConfigManager {
+
+    private static final String CONFIG_FILE = "config.json";
 
     private final AuthConfig authConfig;
     private Config config;
@@ -30,16 +33,16 @@ public class ConfigManager {
         reloadConfig();
     }
 
-    public void reload() {
-        try {
-            this.config = reloadConfig();
-        } catch (IOException e) {
-            Downloader.LOGGER.error("Failed to load configuration", e);
-        }
+    public void replaceConfig(Config config) throws IOException {
+        Downloader.OBJECT_MAPPER.writeValue(
+                new BufferedOutputStream(Files.newOutputStream(Paths.get(CONFIG_FILE))),
+                config
+        );
+        reloadConfig();
     }
 
-    private Config reloadConfig() throws IOException {
-        config = Downloader.OBJECT_MAPPER.readValue(stream("config.json"), Config.class);
+    private void reloadConfig() throws IOException {
+        config = Downloader.OBJECT_MAPPER.readValue(stream(CONFIG_FILE), Config.class);
         httpClient = new OkHttpClient.Builder()
                 .addInterceptor(chain -> {
                     Request request = chain.request();
@@ -56,8 +59,6 @@ public class ConfigManager {
                     return chain.proceed(builder.build());
                 })
                 .build();
-
-        return config;
     }
 
     public Config config() {

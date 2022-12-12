@@ -6,6 +6,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.AuthConfig;
 import dev.vankka.dsrvdownloader.config.Config;
+import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
 import dev.vankka.dsrvdownloader.util.RequestSourceUtil;
@@ -14,19 +15,22 @@ import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.caffeine.CaffeineProxyManager;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.distributed.remote.RemoteBucketState;
-import okhttp3.*;
 import okhttp3.ResponseBody;
+import okhttp3.*;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -38,6 +42,7 @@ import java.util.function.Supplier;
 public class AdminController {
 
     private final ConfigManager configManager;
+    private final ChannelManager channelManager;
     private final OkHttpClient httpClient = new OkHttpClient();
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -52,8 +57,9 @@ public class AdminController {
 
     private final Cache<String, Boolean> tokens = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
 
-    public AdminController(ConfigManager configManager) {
+    public AdminController(ConfigManager configManager, ChannelManager channelManager) {
         this.configManager = configManager;
+        this.channelManager = channelManager;
     }
 
     private String getRedirectUri(HttpServletRequest request) {
@@ -61,9 +67,32 @@ public class AdminController {
                 + "/admin/token";
     }
 
+    private void checkAuthorization(String authorization) {
+        if (StringUtils.isBlank(authorization)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        if (authorization.startsWith("Bearer") && authorization.contains(" ")) {
+            authorization = authorization.substring(authorization.indexOf(" ") + 1);
+        }
+        if (StringUtils.isBlank(authorization) || tokens.getIfPresent(authorization) == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private String createToken() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().encodeToString(bytes);
+    }
+
+    private String cookie(String state) {
+        return "state=" + state + ";Secure;HttpOnly;Path=/admin/token;SameSite=Lax";
+    }
+
     @GetMapping(path = "/admin/login")
-    public View login(HttpServletRequest request) {
+    public View login(HttpServletRequest request, HttpServletResponse response) {
         AuthConfig authConfig = configManager.authConfig();
+        String state = createToken();
 
         String url = Objects.requireNonNull(HttpUrl.parse("https://discord.com/oauth2/authorize"))
                 .newBuilder()
@@ -71,14 +100,20 @@ public class AdminController {
                 .setQueryParameter("scope", "identify")
                 .addQueryParameter("redirect_uri", getRedirectUri(request))
                 .addQueryParameter("response_type", "code")
+                .addQueryParameter("state", state)
                 .build().url().toString();
+
+        response.addHeader("Set-Cookie", cookie(state) + ";Max-Age=60");
         return new RedirectView(url);
     }
 
     @GetMapping(path = "/admin/token")
     public Object authorize(
             @RequestParam(name = "code") String code,
-            HttpServletRequest request
+            @RequestParam(name = "state") String state,
+            @CookieValue(name = "state") String stateCookie,
+            HttpServletRequest request,
+            HttpServletResponse servletResponse
     ) throws IOException {
         String requester = RequestSourceUtil.getRequestSource(request);
 
@@ -86,6 +121,11 @@ public class AdminController {
         if (!bucket.tryConsume(1)) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS);
         }
+
+        if (!state.equals(stateCookie)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        servletResponse.addHeader("Set-Cookie", cookie("") + ";Max-Age=0");
 
         AuthConfig authConfig = configManager.authConfig();
         String redirectUri = getRedirectUri(request);
@@ -157,27 +197,47 @@ public class AdminController {
             }
         }
 
-        byte[] bytes = new byte[32];
-        secureRandom.nextBytes(bytes);
-        String token = Base64.getEncoder().encodeToString(bytes);
-
+        String token = createToken();
         tokens.put(token, false);
         return ResponseEntity.ok(token);
     }
 
-    @PostMapping(path = "/admin/update-config")
+    @GetMapping(path = "/admin/config")
+    public ResponseEntity<?> getConfig(@RequestHeader("Authorization") String authorization) {
+        checkAuthorization(authorization);
+
+        try {
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Downloader.OBJECT_MAPPER.writeValueAsString(configManager.config()));
+        } catch (Throwable e) {
+            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to write config\n" + ExceptionUtils.getStackTrace(e));
+        }
+    }
+
+    @PostMapping(path = "/admin/config")
+    @ResponseStatus(code = HttpStatus.OK, reason = "Success")
     public void updateConfig(
             @RequestHeader("Authorization") String authorization,
             @RequestBody Config config
     ) {
-        if (authorization.startsWith("Bearer") && authorization.contains(" ")) {
-            authorization = authorization.substring(authorization.indexOf(" ") + 1);
-        }
-        if (StringUtils.isBlank(authorization) || tokens.getIfPresent(authorization) == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        }
+        checkAuthorization(authorization);
 
-        // TODO
-        throw new ResponseStatusException(HttpStatus.OK);
+        try {
+            configManager.replaceConfig(config);
+        } catch (Throwable e) {
+            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to save/load config\n" + ExceptionUtils.getStackTrace(e));
+        }
+    }
+
+    @PostMapping(path = "/admin/reload-channels")
+    @ResponseStatus(code = HttpStatus.OK, reason = "Reloaded")
+    public void reloadChannels(@RequestHeader("Authorization") String authorization) {
+        checkAuthorization(authorization);
+        try {
+            channelManager.reloadVersionChannels();
+        } catch (Throwable e) {
+            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to reload channels\n" + ExceptionUtils.getStackTrace(e));
+        }
     }
 }
