@@ -309,7 +309,7 @@ public class Downloader {
             }
 
             postToWebhook("Downloading snapshot artifact `" + snapshotFileName + "`...");
-            boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST", file);
+            boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST&c=shaded", file);
             if (success) {
                 boolean webhook = snapshotFile != null; // don't send if we're getting this after a restart
                 snapshotFile = file;
