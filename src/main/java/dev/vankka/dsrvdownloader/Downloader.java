@@ -287,11 +287,11 @@ public class Downloader {
             if (snapshotLastChecked > 0) {
                 snapshotHeaders.put("If-Modified-Since", RFC822_FORMATTER.format(snapshotLastChecked));
             }
-            String snapshotBody = getBody("https://raw.githubusercontent.com/DiscordSRV/DiscordSRV/develop/pom.xml", snapshotHeaders);
+            String snapshotBody = getBody("https://raw.githubusercontent.com/DiscordSRV/DiscordSRV/develop/gradle.properties", snapshotHeaders);
             snapshotLastChecked = currentTime;
 
             if (snapshotBody != null) {
-                snapshotBuild = snapshotBody.split("<version>")[1].split("</version>")[0];
+                snapshotBuild = snapshotBody.split("version=")[1].split("\n")[0];
                 previousSnapshotHash = null;
             }
         }
