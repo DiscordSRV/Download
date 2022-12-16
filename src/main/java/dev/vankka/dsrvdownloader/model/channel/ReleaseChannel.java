@@ -151,6 +151,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             artifacts.put(
                     artifactId,
                     new Artifact(
+                            artifactId,
                             fileName,
                             file,
                             null,

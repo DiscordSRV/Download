@@ -8,6 +8,7 @@ import java.nio.file.Path;
 
 public class Artifact {
 
+    private final String identifier;
     private final String fileName;
     private final long size;
     private final Path file;
@@ -16,6 +17,7 @@ public class Artifact {
     private final String sha256;
 
     public Artifact(
+            String identifier,
             String fileName,
             Path file,
             @Nullable Path metaFile,
@@ -23,6 +25,7 @@ public class Artifact {
             String sha256
     ) throws IOException {
         this(
+                identifier,
                 fileName,
                 content != null ? content.length : Files.size(file),
                 file,
@@ -33,6 +36,7 @@ public class Artifact {
     }
 
     public Artifact(
+            String identifier,
             String fileName,
             long size,
             Path file,
@@ -40,12 +44,17 @@ public class Artifact {
             @Nullable byte[] content,
             String sha256
     ) {
+        this.identifier = identifier;
         this.fileName = fileName;
         this.size = size;
         this.file = file;
         this.metaFile = metaFile;
         this.content = content;
         this.sha256 = sha256;
+    }
+
+    public String getIdentifier() {
+        return identifier;
     }
 
     public String getFileName() {

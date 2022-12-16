@@ -77,7 +77,7 @@ public class DiscordWebhook {
     }
 
     @Bean(destroyMethod = "shutdown")
-    private ScheduledExecutorService executor() {
+    private ScheduledExecutorService discordExecutor() {
         return executorService;
     }
 

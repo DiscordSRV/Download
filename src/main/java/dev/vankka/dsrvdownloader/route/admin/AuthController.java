@@ -1,12 +1,10 @@
 package dev.vankka.dsrvdownloader.route.admin;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.AuthConfig;
-import dev.vankka.dsrvdownloader.config.Config;
-import dev.vankka.dsrvdownloader.manager.ChannelManager;
+import dev.vankka.dsrvdownloader.manager.AuthManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
 import dev.vankka.dsrvdownloader.util.RequestSourceUtil;
@@ -15,15 +13,13 @@ import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.caffeine.CaffeineProxyManager;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.distributed.remote.RemoteBucketState;
-import okhttp3.ResponseBody;
 import okhttp3.*;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -32,67 +28,42 @@ import org.springframework.web.servlet.view.RedirectView;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.Objects;
 import java.util.function.Supplier;
 
 @RestController
-public class AdminController {
+public class AuthController {
 
+    private final AuthManager authManager;
     private final ConfigManager configManager;
-    private final ChannelManager channelManager;
     private final OkHttpClient httpClient = new OkHttpClient();
-    private final SecureRandom secureRandom = new SecureRandom();
 
     // 10 requests / 5 minutes
     @SuppressWarnings("unchecked")
     private final CaffeineProxyManager<String> authRateLimit = new CaffeineProxyManager<>(
             (Caffeine<String, RemoteBucketState>) (Object) Caffeine.newBuilder(),
-            Duration.ofMinutes(1)
-    );
+            Duration.ofMinutes(1));
     private final Supplier<BucketConfiguration> authRateLimitSupplier = () -> BucketConfiguration.builder()
             .addLimit(Bandwidth.simple(10, Duration.ofMinutes(5))).build();
 
-    private final Cache<String, Boolean> tokens = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
-
-    public AdminController(ConfigManager configManager, ChannelManager channelManager) {
+    public AuthController(AuthManager authManager, ConfigManager configManager) {
+        this.authManager = authManager;
         this.configManager = configManager;
-        this.channelManager = channelManager;
     }
 
     private String getRedirectUri(HttpServletRequest request) {
-        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString()
-                + "/admin/token";
-    }
-
-    private void checkAuthorization(String authorization) {
-        if (StringUtils.isBlank(authorization)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        }
-        if (authorization.startsWith("Bearer") && authorization.contains(" ")) {
-            authorization = authorization.substring(authorization.indexOf(" ") + 1);
-        }
-        if (StringUtils.isBlank(authorization) || tokens.getIfPresent(authorization) == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        }
-    }
-
-    private String createToken() {
-        byte[] bytes = new byte[32];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().encodeToString(bytes);
+        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString() + TOKEN_PATH;
     }
 
     private String cookie(String state) {
-        return "state=" + state + ";Secure;HttpOnly;Path=/admin/token;SameSite=Lax";
+        return "state=" + state + ";Secure;HttpOnly;Path=" + TOKEN_PATH + ";SameSite=Lax";
     }
 
     @GetMapping(path = "/admin/login")
     public View login(HttpServletRequest request, HttpServletResponse response) {
         AuthConfig authConfig = configManager.authConfig();
-        String state = createToken();
+        String state = authManager.createToken();
 
         String url = Objects.requireNonNull(HttpUrl.parse("https://discord.com/oauth2/authorize"))
                 .newBuilder()
@@ -107,7 +78,8 @@ public class AdminController {
         return new RedirectView(url);
     }
 
-    @GetMapping(path = "/admin/token")
+    private static final String TOKEN_PATH = "/admin/login/token";
+    @GetMapping(path = TOKEN_PATH)
     public Object authorize(
             @RequestParam(name = "code") String code,
             @RequestParam(name = "state") String state,
@@ -197,47 +169,8 @@ public class AdminController {
             }
         }
 
-        String token = createToken();
-        tokens.put(token, false);
+        String token = authManager.createToken();
+        authManager.putToken(token);
         return ResponseEntity.ok(token);
-    }
-
-    @GetMapping(path = "/admin/config")
-    public ResponseEntity<?> getConfig(@RequestHeader("Authorization") String authorization) {
-        checkAuthorization(authorization);
-
-        try {
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Downloader.OBJECT_MAPPER.writeValueAsString(configManager.config()));
-        } catch (Throwable e) {
-            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to write config\n" + ExceptionUtils.getStackTrace(e));
-        }
-    }
-
-    @PostMapping(path = "/admin/config")
-    @ResponseStatus(code = HttpStatus.OK, reason = "Success")
-    public void updateConfig(
-            @RequestHeader("Authorization") String authorization,
-            @RequestBody Config config
-    ) {
-        checkAuthorization(authorization);
-
-        try {
-            configManager.replaceConfig(config);
-        } catch (Throwable e) {
-            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to save/load config\n" + ExceptionUtils.getStackTrace(e));
-        }
-    }
-
-    @PostMapping(path = "/admin/reload-channels")
-    @ResponseStatus(code = HttpStatus.OK, reason = "Reloaded")
-    public void reloadChannels(@RequestHeader("Authorization") String authorization) {
-        checkAuthorization(authorization);
-        try {
-            channelManager.reloadVersionChannels();
-        } catch (Throwable e) {
-            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to reload channels\n" + ExceptionUtils.getStackTrace(e));
-        }
     }
 }

@@ -38,6 +38,7 @@ public class IO implements AutoCloseable {
     }
 
     public IO withDigest(MessageDigest digest) {
+        // TODO: investigate if this works correctly
         outputs.add((bytes, size) -> digest.digest(bytes, 0, size));
         return this;
     }

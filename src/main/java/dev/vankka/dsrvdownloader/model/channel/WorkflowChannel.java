@@ -226,6 +226,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         artifacts.put(
                                 artifactIdentifier,
                                 new Artifact(
+                                        artifactIdentifier,
                                         fileName,
                                         file,
                                         metaFile,
@@ -397,6 +398,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         artifactsByIdentifier.put(
                                 identifier,
                                 new Artifact(
+                                        identifier,
                                         fileName,
                                         file,
                                         metaFile,

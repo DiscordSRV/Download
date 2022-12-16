@@ -17,11 +17,13 @@ repositories {
 dependencies {
     // Spring (application framework, web server)
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
     // Apache commons
     implementation 'commons-io:commons-io:2.11.0'
     implementation 'org.apache.commons:commons-lang3:3.12.0'
+    implementation 'org.apache.commons:commons-collections4:4.4'
 
     // Caffeine (Cache)
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.2'
@@ -33,11 +35,14 @@ dependencies {
     // Jackson (JSON)
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0'
 
-    // okhttp (Http requests)
+    // okhttp (http requests)
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 
     // Discord webhooks
     implementation 'club.minnced:discord-webhooks:0.8.2'
+
+    // H2 database driver (stats)
+    implementation 'com.h2database:h2:2.1.214'
 
     // SLF4J logging impl
     implementation 'org.slf4j:slf4j-simple:2.0.4'

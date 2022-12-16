@@ -2,6 +2,7 @@ package dev.vankka.dsrvdownloader.route.v2;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
+import dev.vankka.dsrvdownloader.manager.StatsManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
@@ -32,6 +33,7 @@ import java.util.function.Supplier;
 public class DownloadRouteV2 {
 
     private final ChannelManager channelManager;
+    private final StatsManager statsManager;
 
     // 10 downloads per 1 minute
     @SuppressWarnings("unchecked")
@@ -42,8 +44,9 @@ public class DownloadRouteV2 {
     private final Supplier<BucketConfiguration> rateLimitSupplier = () -> BucketConfiguration.builder()
             .addLimit(Bandwidth.simple(10, Duration.ofMinutes(1))).build();
 
-    public DownloadRouteV2(ChannelManager channelManager) {
+    public DownloadRouteV2(ChannelManager channelManager, StatsManager statsManager) {
         this.channelManager = channelManager;
+        this.statsManager = statsManager;
     }
 
     @RequestMapping(
@@ -101,6 +104,8 @@ public class DownloadRouteV2 {
         if (!bucket.tryConsume(1)) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS);
         }
+
+        statsManager.increment(channel, artifact.getIdentifier(), version.getIdentifier());
 
         byte[] content = artifact.getContent();
         return ResponseEntity.ok()
