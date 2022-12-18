@@ -72,11 +72,6 @@ public class IO implements AutoCloseable {
         while ((size = inputStream.read(buffer)) > 0) {
             for (int i = 0; i < outputs.size(); i++) {
                 byte[] arr = arrays[i];
-//                if (arr.length != size) {
-//                    // Resize array if needed
-//                    arr = arrays[i] = new byte[size];
-//                }
-
                 Con output = outputs.get(i);
 
                 System.arraycopy(buffer, 0, arr, 0, size);
