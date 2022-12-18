@@ -38,8 +38,7 @@ public class IO implements AutoCloseable {
     }
 
     public IO withDigest(MessageDigest digest) {
-        // TODO: investigate if this works correctly
-        outputs.add((bytes, size) -> digest.digest(bytes, 0, size));
+        outputs.add((bytes, size) -> digest.update(bytes, 0, size));
         return this;
     }
 
@@ -73,10 +72,10 @@ public class IO implements AutoCloseable {
         while ((size = inputStream.read(buffer)) > 0) {
             for (int i = 0; i < outputs.size(); i++) {
                 byte[] arr = arrays[i];
-                if (arr.length != size) {
-                    // Resize array if needed
-                    arr = arrays[i] = new byte[size];
-                }
+//                if (arr.length != size) {
+//                    // Resize array if needed
+//                    arr = arrays[i] = new byte[size];
+//                }
 
                 Con output = outputs.get(i);
 
