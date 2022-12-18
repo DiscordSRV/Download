@@ -292,7 +292,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         );
     }
 
-    private void setLastDiscordMessage(String identifier, String message, String longerMessage) {
+    protected void setLastDiscordMessage(String identifier, String message, String longerMessage) {
         DiscordMessage discordMessage = messages.remove(identifier);
         if (discordMessage == null) {
             discordWebhook.processMessage(new DiscordMessage().setMessage(message, longerMessage));

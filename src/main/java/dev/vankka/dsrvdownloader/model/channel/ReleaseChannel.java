@@ -17,6 +17,7 @@ import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.tomcat.util.buf.HexUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -171,7 +172,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             try {
                 includeRelease(release, config.versionsToKeepInMemory > i, false);
             } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                Downloader.LOGGER.error("Failed to include release " + release.tag_name + " for " + describe(), e);
+                setLastDiscordMessage(release.tag_name, "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
             }
         }
     }

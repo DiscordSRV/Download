@@ -17,6 +17,7 @@ import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.lang3.tuple.Triple;
 import org.apache.tomcat.util.buf.HexUtils;
 
@@ -243,7 +244,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 try {
                     includeRun(run, i < config.versionsToKeepInMemory, false);
                 } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                    Downloader.LOGGER.error("Failed to include " + run.head_sha + " for " + describe(), e);
+                    setLastDiscordMessage(run.head_sha, "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
                 }
             }
 
