@@ -260,11 +260,11 @@ public class V1Routes {
             if (snapshotLastChecked > 0) {
                 snapshotHeaders.put("If-Modified-Since", RFC822_FORMATTER.format(snapshotLastChecked));
             }
-            String snapshotBody = getBody("https://raw.githubusercontent.com/DiscordSRV/DiscordSRV/develop/pom.xml", snapshotHeaders);
+            String snapshotBody = getBody("https://raw.githubusercontent.com/DiscordSRV/DiscordSRV/develop/gradle.properties", snapshotHeaders);
             snapshotLastChecked = currentTime;
 
             if (snapshotBody != null) {
-                snapshotBuild = snapshotBody.split("<version>")[1].split("</version>")[0];
+                snapshotBuild = snapshotBody.split("version=")[1].split("\n")[0];
                 previousSnapshotHash = null;
             }
         }
@@ -282,7 +282,7 @@ public class V1Routes {
             }
 
             postToWebhook("Downloading snapshot artifact `" + snapshotFileName + "`...");
-            boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST", file);
+            boolean success = getToFile("https://nexus.scarsz.me/service/local/artifact/maven/redirect?r=snapshots&g=com.discordsrv&a=discordsrv&v=LATEST&c=shaded", file);
             if (success) {
                 boolean webhook = snapshotFile != null; // don't send if we're getting this after a restart
                 snapshotFile = file;
