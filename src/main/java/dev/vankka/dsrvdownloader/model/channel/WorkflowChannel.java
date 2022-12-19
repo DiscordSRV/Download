@@ -439,8 +439,8 @@ public class WorkflowChannel extends AbstractVersionChannel {
     }
 
     @Override
-    protected String amountType() {
-        return "builds";
+    protected String amountType(int amount) {
+        return amount == 1 ? "build" : "builds";
     }
 
     @Override

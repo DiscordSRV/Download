@@ -190,8 +190,8 @@ public class ReleaseChannel extends AbstractVersionChannel {
     }
 
     @Override
-    protected String amountType() {
-        return "versions";
+    protected String amountType(int amount) {
+        return amount == 1 ? "version" : "versions";
     }
 
     private static final Set<String> ACCEPTABLE_ACTIONS = new HashSet<>(Arrays.asList("created", "released"));

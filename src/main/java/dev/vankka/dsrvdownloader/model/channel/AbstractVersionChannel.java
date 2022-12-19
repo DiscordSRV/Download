@@ -160,7 +160,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         }
         versionCheck.amount = versionsBehind;
         versionCheck.amountSource = VersionCheck.AmountSource.GITHUB;
-        versionCheck.amountType = amountType();
+        versionCheck.amountType = amountType(versionsBehind);
 
         versionCheck.securityIssues = securityFailures;
         versionCheck.insecure = vulnerability.get();
@@ -169,7 +169,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected abstract int versionsBehind(String comparedTo, Consumer<String> versionConsumer);
-    protected abstract String amountType();
+    protected abstract String amountType(int amount);
 
     @Override
     public ObjectNode versionResponse(HttpServletRequest request, boolean preferIdentifier) {
