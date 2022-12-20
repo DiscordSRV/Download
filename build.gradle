@@ -1,6 +1,11 @@
 plugins {
+    id 'org.springframework.boot' version '2.7.3'
+    id 'io.spring.dependency-management' version '1.0.13.RELEASE'
     id 'java'
 }
+
+sourceCompatibility = '17'
+targetCompatibility = '17'
 
 group 'dev.vankka'
 version '1.0'
@@ -10,10 +15,40 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.json:json:20201115'
-    implementation 'commons-io:commons-io:2.8.0'
-    implementation 'io.javalin:javalin:3.13.7'
-    implementation 'org.slf4j:slf4j-simple:1.7.30'
+    // Spring (application framework, web server)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // Apache commons
+    implementation 'commons-io:commons-io:2.11.0'
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+
+    // Caffeine (Cache)
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.2'
+
+    // Bucket4j (Rate limiting)
+    implementation 'com.bucket4j:bucket4j-core:8.1.1'
+    implementation 'com.bucket4j:bucket4j-caffeine:8.1.1'
+
+    // Jackson (JSON)
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0'
+
+    // okhttp (http requests)
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+
+    // Discord webhooks
+    implementation 'club.minnced:discord-webhooks:0.8.2'
+
+    // H2 database driver (stats)
+    implementation 'com.h2database:h2:2.1.214'
+
+    // SLF4J logging impl
+    implementation 'org.slf4j:slf4j-simple:2.0.4'
+
+    // org.json (v1 routes)
+    implementation 'org.json:json:20220924'
 }
 
 jar {
