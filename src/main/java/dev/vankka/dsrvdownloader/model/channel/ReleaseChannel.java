@@ -141,12 +141,18 @@ public class ReleaseChannel extends AbstractVersionChannel {
                         }
                     }
                 }
-            } else if (inMemory) {
+            } else {
                 try (IO io = new IO(Files.newInputStream(file))
                         .withDigest(digest)
-                        .withOutputStream(Files.newOutputStream(file))
                 ) {
-                    io.stream();
+                    if (inMemory) {
+                        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                        io.withOutputStream(byteStream).stream();
+
+                        bytes = byteStream.toByteArray();
+                    } else {
+                        io.stream();
+                    }
                 }
             }
 
