@@ -52,8 +52,10 @@ public class AuthController {
         this.configManager = configManager;
     }
 
+    @SuppressWarnings("HttpUrlsUsage")
     private String getRedirectUri(HttpServletRequest request) {
-        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString() + TOKEN_PATH;
+        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString()
+                .replace("http://", "https://") + TOKEN_PATH;
     }
 
     private String cookie(String state) {
