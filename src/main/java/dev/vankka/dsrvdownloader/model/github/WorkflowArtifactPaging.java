@@ -2,7 +2,4 @@ package dev.vankka.dsrvdownloader.model.github;
 
 import java.util.List;
 
-public class WorkflowArtifactPaging {
-
-    public List<WorkflowArtifact> artifacts;
-}
+public record WorkflowArtifactPaging(List<WorkflowArtifact> artifacts) {}

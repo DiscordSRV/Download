@@ -1,13 +1,11 @@
 package dev.vankka.dsrvdownloader.model.github;
 
-public class WorkflowRun {
-
-    public long id;
-    public String head_sha;
-    public String conclusion;
-    public String head_branch;
-    public String event;
-    public Commit head_commit;
-    public String html_url;
-
-}
+public record WorkflowRun(
+        long id,
+        String head_sha,
+        String conclusion,
+        String head_branch,
+        String event,
+        Commit head_commit,
+        String html_url
+) {}

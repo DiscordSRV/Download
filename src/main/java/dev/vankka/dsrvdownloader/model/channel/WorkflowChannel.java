@@ -77,13 +77,13 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 }
 
                 WorkflowPaging workflowPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowPaging.class);
-                for (Workflow wf : workflowPaging.workflows) {
-                    if (wf.path.endsWith(config.workflowFile)) {
+                for (Workflow wf : workflowPaging.workflows()) {
+                    if (wf.path().endsWith(config.workflowFile)) {
                         workflow = wf;
                         break;
                     }
                 }
-                if (workflowPaging.total_count < WORKFLOWS_PER_PAGE) {
+                if (workflowPaging.total_count() < WORKFLOWS_PER_PAGE) {
                     break;
                 }
             } catch (IOException e) {
@@ -102,7 +102,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         for (int i = 0; i < pages; i++) {
             Request request = new Request.Builder()
                     .url(baseRepoApiUrl()
-                                 + "/actions/workflows/" + Long.toUnsignedString(workflow.id) + "/runs"
+                                 + "/actions/workflows/" + Long.toUnsignedString(workflow.id()) + "/runs"
                                  + "?status=success&event=push&branch=" + config.branch
                                  + "&per_page=" + WORKFLOWS_RUNS_PER_PAGE + "&page=" + (i + 1))
                     .get().build();
@@ -117,14 +117,14 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 }
 
                 WorkflowRunPaging workflowRunPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowRunPaging.class);
-                if (workflowRunPaging == null || workflowRunPaging.workflow_runs == null) {
+                if (workflowRunPaging == null || workflowRunPaging.workflow_runs() == null) {
                     Downloader.LOGGER.error(
                             "Failed to get workflow runs for " + describe() + ": Failed to parse json");
                     return;
                 }
 
-                workflowRuns.addAll(workflowRunPaging.workflow_runs);
-                if (workflowRunPaging.total_count < WORKFLOWS_RUNS_PER_PAGE) {
+                workflowRuns.addAll(workflowRunPaging.workflow_runs());
+                if (workflowRunPaging.total_count() < WORKFLOWS_RUNS_PER_PAGE) {
                     break;
                 }
             } catch (IOException e) {
@@ -193,7 +193,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
             for (int i = 0; i < Math.min(workflowRuns.size(), config.versionsToKeep); i++) {
                 WorkflowRun run = workflowRuns.get(i);
-                String hash = run.head_sha;
+                String hash = run.head_sha();
 
                 Map<String, Triple<String, Path, Path>> diskVersion = versions.remove(hash);
                 if (diskVersion != null) {
@@ -237,14 +237,15 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         );
                     }
 
-                    putVersion(new Version(hash, run.head_commit != null ? run.head_commit.message : null, artifacts), false);
+                    Commit headCommit = run.head_commit();
+                    putVersion(new Version(hash, headCommit != null ? headCommit.message() : null, artifacts), false);
                     continue;
                 }
 
                 try {
                     includeRun(run, i < config.versionsToKeepInMemory, false);
                 } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                    setLastDiscordMessage(run.head_sha, "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
+                    setLastDiscordMessage(run.head_sha(), "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
                 }
             }
 
@@ -269,16 +270,16 @@ public class WorkflowChannel extends AbstractVersionChannel {
     @SuppressWarnings("BusyWait")
     private void includeRun(WorkflowRun run, boolean inMemory, boolean newVersion)
             throws IOException, InclusionException, DigestException, NoSuchAlgorithmException {
-        String hash = run.head_sha;
+        String hash = run.head_sha();
         Path versionStore = store().resolve(hash);
 
         Request request = new Request.Builder()
-                .url(baseRepoApiUrl() + "/actions/runs/" + Long.toUnsignedString(run.id) + "/artifacts")
+                .url(baseRepoApiUrl() + "/actions/runs/" + Long.toUnsignedString(run.id()) + "/artifacts")
                 .get().build();
 
         WorkflowArtifactPaging artifactPaging = null;
         int attempts = 0;
-        while ((artifactPaging == null || artifactPaging.artifacts.size() == 0) && attempts < ARTIFACT_REATTEMPTS) {
+        while ((artifactPaging == null || artifactPaging.artifacts().size() == 0) && attempts < ARTIFACT_REATTEMPTS) {
             try (Response response = configManager.httpClient().newCall(request).execute()) {
                 ResponseBody body = response.body();
                 if (!response.isSuccessful() || body == null) {
@@ -295,11 +296,11 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 break;
             }
 
-            if (artifactPaging.artifacts.size() == 0) {
+            if (artifactPaging.artifacts().size() == 0) {
                 attempts++;
                 Downloader.LOGGER.warn(
                         "Retrying getting artifacts for " + describe() + " run "
-                                + Long.toUnsignedString(run.id) + " (Attempts: " + attempts + ")");
+                                + Long.toUnsignedString(run.id()) + " (Attempts: " + attempts + ")");
                 try {
                     Thread.sleep(ARTIFACT_REATTEMPT_DELAY);
                 } catch (InterruptedException ignored) {
@@ -315,11 +316,11 @@ public class WorkflowChannel extends AbstractVersionChannel {
         Map<String, Artifact> artifactsByIdentifier = new LinkedHashMap<>();
         List<byte[]> zips = new ArrayList<>();
 
-        for (WorkflowArtifact artifact : artifactPaging.artifacts) {
+        for (WorkflowArtifact artifact : artifactPaging.artifacts()) {
             boolean any = false;
 
             for (VersionArtifactConfig artifactConfig : config.artifacts) {
-                if (!artifact.expired && Pattern.compile(artifactConfig.archiveNameFormat).matcher(artifact.name).matches()) {
+                if (!artifact.expired() && Pattern.compile(artifactConfig.archiveNameFormat).matcher(artifact.name()).matches()) {
                     any = true;
                     break;
                 }
@@ -330,20 +331,20 @@ public class WorkflowChannel extends AbstractVersionChannel {
             }
 
             Request downloadRequest = new Request.Builder()
-                    .url(artifact.archive_download_url)
+                    .url(artifact.archive_download_url())
                     .get().build();
 
             try (Response downloadResponse = configManager.httpClient().newCall(downloadRequest).execute()) {
                 ResponseBody responseBody = downloadResponse.body();
                 if (!downloadResponse.isSuccessful() || responseBody == null) {
                     throw new InclusionException(
-                            "Failed to download artifact " + artifact.name,
+                            "Failed to download artifact " + artifact.name(),
                             downloadRequest.url() + " => " + HttpContentUtil.prettify(downloadResponse, responseBody));
                 }
 
                 zips.add(responseBody.bytes());
             } catch (IOException e) {
-                throw new InclusionException("Failed to download artifact " + artifact.name);
+                throw new InclusionException("Failed to download artifact " + artifact.name());
             }
         }
 
@@ -423,13 +424,14 @@ public class WorkflowChannel extends AbstractVersionChannel {
             throw new InclusionException("Failed to find any files matching workflow run");
         }
 
-        putVersion(new Version(hash, run.head_commit != null ? run.head_commit.message : null, artifactsByIdentifier), newVersion);
+        Commit headCommit = run.head_commit();
+        putVersion(new Version(hash, headCommit != null ? headCommit.message() : null, artifactsByIdentifier), newVersion);
     }
 
     @Override
     public int versionsBehind(String comparedTo, Consumer<String> versionConsumer) {
         for (int i = 0; i < workflowRuns.size(); i++) {
-            String headSha = workflowRuns.get(i).head_sha;
+            String headSha = workflowRuns.get(i).head_sha();
             versionConsumer.accept(headSha);
             if (headSha.equals(comparedTo)) {
                 return i;
@@ -446,7 +448,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
     @Override
     public void receiveWebhook(String event, JsonNode node) {
         if (!event.equals("workflow_run")
-                || workflow == null || node.get("workflow_run").get("workflow_id").asLong() != workflow.id) {
+                || workflow == null || node.get("workflow_run").get("workflow_id").asLong() != workflow.id()) {
             return;
         }
 
@@ -458,12 +460,13 @@ public class WorkflowChannel extends AbstractVersionChannel {
             return;
         }
 
-        if (!workflowRun.head_branch.equals(config.branch) || !workflowRun.event.equals("push")) {
+        if (!workflowRun.head_branch().equals(config.branch) || !workflowRun.event().equals("push")) {
             return;
         }
 
-        String id = workflowRun.head_sha;
-        String description = workflowRun.head_commit != null ? workflowRun.head_commit.message : null;
+        String id = workflowRun.head_sha();
+        Commit headCommit = workflowRun.head_commit();
+        String description = headCommit != null ? headCommit.message() : null;
         if (description != null && description.contains("\n")) {
             description = description.substring(0, description.indexOf("\n"));
         }
@@ -471,13 +474,13 @@ public class WorkflowChannel extends AbstractVersionChannel {
         String action = node.get("action").asText();
         if (!action.equals("completed")) {
             if (action.equals("requested")) {
-                waiting(id, description, "[workflow](" + workflowRun.html_url + ") to run");
+                waiting(id, description, "[workflow](" + workflowRun.html_url() + ") to run");
             }
             return;
         }
 
-        if (!workflowRun.conclusion.equals("success")) {
-            failed(id, description, "[workflow](" + workflowRun.html_url + ") failure");
+        if (!workflowRun.conclusion().equals("success")) {
+            failed(id, description, "[workflow](" + workflowRun.html_url() + ") failure");
             return;
         }
 

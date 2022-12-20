@@ -82,13 +82,13 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
     private void includeRelease(Release release, boolean inMemory, boolean newVersion)
             throws IOException, RuntimeException, InclusionException, DigestException, NoSuchAlgorithmException {
-        Path store = store().resolve(release.tag_name);
+        Path store = store().resolve(release.tag_name());
 
         Map<String, Release.Asset> assets = new HashMap<>();
 
-        for (Release.Asset releaseAsset : release.assets) {
+        for (Release.Asset releaseAsset : release.assets()) {
             for (VersionArtifactConfig artifact : config.artifacts) {
-                if (Pattern.compile(artifact.fileNameFormat).matcher(releaseAsset.name).matches()) {
+                if (Pattern.compile(artifact.fileNameFormat).matcher(releaseAsset.name()).matches()) {
                     assets.put(artifact.identifier, releaseAsset);
                 }
             }
@@ -106,14 +106,14 @@ public class ReleaseChannel extends AbstractVersionChannel {
             String artifactId = entry.getKey();
             Release.Asset asset = entry.getValue();
 
-            String fileName = asset.name;
+            String fileName = asset.name();
             Path file = store.resolve(fileName);
 
             byte[] bytes = null;
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             if (!Files.exists(file)) {
                 Request request = new Request.Builder()
-                        .url(asset.browser_download_url)
+                        .url(asset.browser_download_url())
                         .get().build();
 
                 try (Response response = configManager.httpClient().newCall(request).execute()) {
@@ -162,7 +162,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             );
         }
 
-        putVersion(new Version(release.tag_name, release.name, artifacts), newVersion);
+        putVersion(new Version(release.tag_name(), release.name(), artifacts), newVersion);
     }
 
     private void loadFiles() {
@@ -172,7 +172,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             try {
                 includeRelease(release, config.versionsToKeepInMemory > i, false);
             } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                setLastDiscordMessage(release.tag_name, "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
+                setLastDiscordMessage(release.tag_name(), "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
             }
         }
     }
@@ -180,7 +180,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
     @Override
     public int versionsBehind(String comparedTo, Consumer<String> versionConsumer) {
         for (int i = 0; i < releases.size(); i++) {
-            String tagName = releases.get(i).tag_name;
+            String tagName = releases.get(i).tag_name();
             versionConsumer.accept(tagName);
             if (tagName.equals(comparedTo)) {
                 return i;
@@ -215,11 +215,11 @@ public class ReleaseChannel extends AbstractVersionChannel {
         }
 
         if (!action.equals("released")) {
-            waiting(release.tag_name, release.name, "for [release](" + release.html_url + ") to publish");
+            waiting(release.tag_name(), release.name(), "for [release](" + release.html_url() + ") to publish");
             return;
         }
 
-        processing(release.tag_name, release.name);
+        processing(release.tag_name(), release.name());
         releases.add(0, release);
 
         try {
@@ -229,9 +229,9 @@ public class ReleaseChannel extends AbstractVersionChannel {
                 throw new InclusionException(e);
             }
 
-            success(release.tag_name, release.name);
+            success(release.tag_name(), release.name());
         } catch (InclusionException e) {
-            failed(release.tag_name, release.name, e.getMessage(), e.getLonger());
+            failed(release.tag_name(), release.name(), e.getMessage(), e.getLonger());
         }
 
         expireOldestVersion();

@@ -1,23 +1,8 @@
 package dev.vankka.dsrvdownloader.model.github;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import java.util.List;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class Release {
+public record Release(String html_url, String tag_name, String name, List<Asset> assets) {
 
-    public String html_url;
-    public String tag_name;
-    public String name;
-    public List<Asset> assets;
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class Asset {
-
-        public String name;
-        public String content_type;
-        public String browser_download_url;
-
-    }
+    public record Asset(String name, String content_type, String browser_download_url) {}
 }
