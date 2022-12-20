@@ -12,8 +12,6 @@ public class DiscordMessage {
     private boolean updated = true;
     private CompletableFuture<ReadonlyMessage> future;
 
-    public DiscordMessage() {}
-
     public DiscordMessage setMessage(String message, String longerMessage) {
         this.message = message;
         this.longerMessage = longerMessage;
