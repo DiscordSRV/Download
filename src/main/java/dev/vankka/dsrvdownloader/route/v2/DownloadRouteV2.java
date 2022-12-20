@@ -12,11 +12,9 @@ import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.caffeine.CaffeineProxyManager;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.distributed.remote.RemoteBucketState;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.FileSystemResource;
+import org.apache.commons.io.IOUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,6 +23,9 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -60,7 +61,8 @@ public class DownloadRouteV2 {
             @PathVariable String identifier,
             @PathVariable String artifactIdentifier,
             @RequestParam(name = "preferRedirect", defaultValue = "true") boolean preferRedirect,
-            HttpServletRequest request
+            HttpServletRequest request,
+            HttpServletResponse response
     ) {
         VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
@@ -105,16 +107,25 @@ public class DownloadRouteV2 {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS);
         }
 
-        statsManager.increment(channel, artifact.getIdentifier(), version.getIdentifier());
-
         byte[] content = artifact.getContent();
-        return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"" + artifact.getFileName() + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(artifact.getSize())
-                .body(content != null
-                      ? new ByteArrayResource(content)
-                      : new FileSystemResource(artifact.getFile())
-                );
+        response.addHeader("Content-Disposition", "attachment; filename=\"" + artifact.getFileName() + "\"");
+        response.addHeader("Content-Type", MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        response.setContentLengthLong(artifact.getSize());
+        response.setStatus(200);
+
+        try (OutputStream outputStream = new BufferedOutputStream(response.getOutputStream())) {
+            try (InputStream inputStream = new BufferedInputStream(
+                    content != null ? new ByteArrayInputStream(content) : Files.newInputStream(artifact.getFile())
+            )) {
+                byte[] buffer = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
+                int amount;
+                while ((amount = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, amount);
+                }
+            }
+
+            statsManager.increment(channel, artifact.getIdentifier(), version.getIdentifier());
+        } catch (IOException ignored) {}
+        return null;
     }
 }
