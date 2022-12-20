@@ -172,7 +172,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             try {
                 includeRelease(release, config.versionsToKeepInMemory() > i, false);
             } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                setLastDiscordMessage(release.tag_name(), "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
+                setLastDiscordMessage(release.tag_name(), "[Boot] Failed to load release " + release.tag_name() + " [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
             }
         }
     }

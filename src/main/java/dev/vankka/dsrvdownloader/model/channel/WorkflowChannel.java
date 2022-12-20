@@ -245,7 +245,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 try {
                     includeRun(run, i < config.versionsToKeepInMemory(), false);
                 } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                    setLastDiscordMessage(run.head_sha(), "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
+                    setLastDiscordMessage(run.head_sha(), "[Boot] Failed to load workflow for " + hash + " [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
                 }
             }
 

@@ -15,6 +15,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -52,20 +53,39 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         try {
             Path store = store();
 
-            List<Path> toDelete;
-            try (Stream<Path> pathStream = Files.list(store)) {
-                toDelete = pathStream
-                        .filter(path -> versions.values().stream()
-                                .noneMatch(ver -> ver.getArtifactsByIdentifier().values()
-                                            .stream()
-                                            .anyMatch(art -> path.equals(art.getFile()) || path.equals(art.getMetaFile()))
+            try (Stream<Path> folders = Files.list(store)) {
+                for (Path folder : folders.toList()) {
+                    List<Path> toDelete;
+                    try (Stream<Path> files = Files.list(folder)) {
+                        toDelete = files
+                                .filter(path -> versions.values().stream()
+                                        .noneMatch(ver -> ver.getArtifactsByIdentifier().values()
+                                                .stream()
+                                                .anyMatch(art -> path.equals(art.getFile()) || path.equals(art.getMetaFile()))
+                                        )
                                 )
-                        )
-                        .collect(Collectors.toList());
+                                .collect(Collectors.toList());
+                    }
+                    for (Path path : toDelete) {
+                        Files.delete(path);
+                    }
+                }
             }
 
-            for (Path path : toDelete) {
-                Files.delete(path);
+            try (Stream<Path> folders = Files.list(store)) {
+                folders.filter(folder -> {
+                    try (Stream<Path> fileStream = Files.list(folder)) {
+                        return fileStream.findAny().isEmpty();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
             }
         } catch (IOException e) {
             Downloader.LOGGER.error("Failed to cleanup directory of " + describe(), e);
