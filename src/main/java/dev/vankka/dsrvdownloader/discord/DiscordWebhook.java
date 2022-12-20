@@ -45,7 +45,7 @@ public class DiscordWebhook {
 
             String longerMessage = content.getValue();
             if (longerMessage != null) {
-                int maxLength = 4096-7;
+                int maxLength = 4096 - "```\n```".length();
                 if (longerMessage.length() > maxLength) {
                     longerMessage = longerMessage.substring(0, maxLength);
                 }
