@@ -23,7 +23,7 @@ public class DiscordWebhook {
 
     public DiscordWebhook(ConfigManager configManager) {
         this.executorService = Executors.newSingleThreadScheduledExecutor();
-        this.webhookClient = WebhookClient.withUrl(configManager.config().discordWebhookUrl);
+        this.webhookClient = WebhookClient.withUrl(configManager.config().discordWebhookUrl());
         executorService.scheduleAtFixedRate(this::processQueue, 1, 1, TimeUnit.SECONDS);
     }
 

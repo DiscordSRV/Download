@@ -58,7 +58,7 @@ public class StatsManager {
 
     public void increment(VersionChannel versionChannel, String artifactIdentifier, String version) {
         VersionChannelConfig config = versionChannel.getConfig();
-        Artifact artifact = new Artifact(config.repoOwner, config.repoName, config.name, artifactIdentifier, version);
+        Artifact artifact = new Artifact(config.repoOwner(), config.repoName(), config.name(), artifactIdentifier, version);
         alter(artifact, AtomicInteger::getAndIncrement);
     }
 

@@ -2,7 +2,6 @@ package dev.vankka.dsrvdownloader.route.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
-import dev.vankka.dsrvdownloader.config.RepoConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
@@ -33,26 +32,17 @@ public class GithubWebhookRouteV2 {
     }
 
     @PostMapping(
-            path = "/v2/{repoOwner}/{repoName}/github-webhook/{route}",
+            path = "/v2/github-webhook/{route}",
             consumes = MediaType.APPLICATION_JSON_VALUE
     )
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void handle(
-            @PathVariable String repoOwner,
-            @PathVariable String repoName,
             @PathVariable String route,
             @RequestHeader(name = "X-Hub-Signature-256") String signature,
             @RequestHeader(name = "X-GitHub-Event") String event,
             @RequestBody byte[] body
     ) throws Exception {
-        RepoConfig repoConfig = null;
-        for (RepoConfig repo : configManager.config().repos) {
-            if (repo.repoOwner.equalsIgnoreCase(repoOwner) && repo.repoName.equalsIgnoreCase(repoName)) {
-                repoConfig = repo;
-                break;
-            }
-        }
-        if (repoConfig == null || !repoConfig.githubWebhookPath.equals(route)) {
+        if (!configManager.config().githubWebhookPath().equalsIgnoreCase(route)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
@@ -60,7 +50,7 @@ public class GithubWebhookRouteV2 {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        byte[] bytes = hmac256(repoConfig.githubWebhookSecret.getBytes(StandardCharsets.UTF_8), body);
+        byte[] bytes = hmac256(configManager.config().githubWebhookSecret().getBytes(StandardCharsets.UTF_8), body);
         if (bytes == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
@@ -71,9 +61,13 @@ public class GithubWebhookRouteV2 {
         }
 
         JsonNode node = Downloader.OBJECT_MAPPER.readTree(body);
+        JsonNode repository = node.get("repository");
+        String repoOwner = repository.get("owner").get("login").asText();
+        String repoName = repository.get("name").asText();
+
         for (VersionChannel versionChannel : channelManager.versionChannels()) {
             VersionChannelConfig config = versionChannel.getConfig();
-            if (config.repoOwner.equalsIgnoreCase(repoOwner) && config.repoName.equalsIgnoreCase(repoName)) {
+            if (config.repoOwner().equalsIgnoreCase(repoOwner) && config.repoName().equalsIgnoreCase(repoName)) {
                 versionChannel.receiveWebhook(event, node);
             }
         }

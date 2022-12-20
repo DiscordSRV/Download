@@ -41,17 +41,14 @@ public class ChannelManager {
 
     public void reloadVersionChannels() {
         List<VersionChannel> newChannels = new ArrayList<>();
-        for (VersionChannelConfig channelConfig : configManager.config().versionChannels) {
+        for (VersionChannelConfig channelConfig : configManager.config().versionChannels()) {
             VersionChannel channel;
-            switch (channelConfig.type) {
-                case RELEASE:
-                    channel = new ReleaseChannel(configManager, discordWebhook, channelConfig);
-                    break;
-                case WORKFLOW:
-                    channel = new WorkflowChannel(configManager, discordWebhook, channelConfig);
-                    break;
-                default:
+            switch (channelConfig.type()) {
+                case RELEASE -> channel = new ReleaseChannel(configManager, discordWebhook, channelConfig);
+                case WORKFLOW -> channel = new WorkflowChannel(configManager, discordWebhook, channelConfig);
+                default -> {
                     continue;
+                }
             }
             newChannels.add(channel);
         }
@@ -79,9 +76,9 @@ public class ChannelManager {
 
         for (VersionChannel versionChannel : versionChannels) {
             VersionChannelConfig config = versionChannel.getConfig();
-            if (config.repoOwner.equalsIgnoreCase(repoOwner)
-                    && config.repoName.equalsIgnoreCase(repoName)
-                    && config.name.equalsIgnoreCase(name)) {
+            if (config.repoOwner().equalsIgnoreCase(repoOwner)
+                    && config.repoName().equalsIgnoreCase(repoName)
+                    && config.name().equalsIgnoreCase(name)) {
                 return Optional.of(versionChannel);
             }
         }

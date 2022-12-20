@@ -78,7 +78,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
                 WorkflowPaging workflowPaging = Downloader.OBJECT_MAPPER.readValue(body.byteStream(), WorkflowPaging.class);
                 for (Workflow wf : workflowPaging.workflows()) {
-                    if (wf.path().endsWith(config.workflowFile)) {
+                    if (wf.path().endsWith(config.workflowFile())) {
                         workflow = wf;
                         break;
                     }
@@ -97,13 +97,13 @@ public class WorkflowChannel extends AbstractVersionChannel {
             return;
         }
 
-        int pages = config.pagesOfRunsToKeep;
+        int pages = config.pagesOfRunsToKeep();
         workflowRuns = new ArrayList<>(pages * WORKFLOWS_RUNS_PER_PAGE);
         for (int i = 0; i < pages; i++) {
             Request request = new Request.Builder()
                     .url(baseRepoApiUrl()
                                  + "/actions/workflows/" + Long.toUnsignedString(workflow.id()) + "/runs"
-                                 + "?status=success&event=push&branch=" + config.branch
+                                 + "?status=success&event=push&branch=" + config.branch()
                                  + "&per_page=" + WORKFLOWS_RUNS_PER_PAGE + "&page=" + (i + 1))
                     .get().build();
 
@@ -191,7 +191,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 });
             }
 
-            for (int i = 0; i < Math.min(workflowRuns.size(), config.versionsToKeep); i++) {
+            for (int i = 0; i < Math.min(workflowRuns.size(), config.versionsToKeep()); i++) {
                 WorkflowRun run = workflowRuns.get(i);
                 String hash = run.head_sha();
 
@@ -199,8 +199,8 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 if (diskVersion != null) {
                     Map<String, Artifact> artifacts = new HashMap<>();
 
-                    for (VersionArtifactConfig artifactConfig : config.artifacts) {
-                        String artifactIdentifier = artifactConfig.identifier;
+                    for (VersionArtifactConfig artifactConfig : config.artifacts()) {
+                        String artifactIdentifier = artifactConfig.identifier();
 
                         Triple<String, Path, Path> artifact = diskVersion.remove(artifactIdentifier);
                         if (artifact == null) {
@@ -214,7 +214,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         MessageDigest digest = MessageDigest.getInstance("SHA-256");
                         byte[] bytes = null;
                         try (IO io = new IO(Files.newInputStream(file)).withDigest(digest)) {
-                            if (i < config.versionsToKeepInMemory) {
+                            if (i < config.versionsToKeepInMemory()) {
                                 ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
                                 io.withOutputStream(byteStream).stream();
 
@@ -243,7 +243,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 }
 
                 try {
-                    includeRun(run, i < config.versionsToKeepInMemory, false);
+                    includeRun(run, i < config.versionsToKeepInMemory(), false);
                 } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
                     setLastDiscordMessage(run.head_sha(), "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
                 }
@@ -319,8 +319,8 @@ public class WorkflowChannel extends AbstractVersionChannel {
         for (WorkflowArtifact artifact : artifactPaging.artifacts()) {
             boolean any = false;
 
-            for (VersionArtifactConfig artifactConfig : config.artifacts) {
-                if (!artifact.expired() && Pattern.compile(artifactConfig.archiveNameFormat).matcher(artifact.name()).matches()) {
+            for (VersionArtifactConfig artifactConfig : config.artifacts()) {
+                if (!artifact.expired() && Pattern.compile(artifactConfig.archiveNameFormat()).matcher(artifact.name()).matches()) {
                     any = true;
                     break;
                 }
@@ -348,7 +348,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
             }
         }
 
-        List<VersionArtifactConfig> availableConfigs = new ArrayList<>(config.artifacts);
+        List<VersionArtifactConfig> availableConfigs = new ArrayList<>(config.artifacts());
         for (byte[] zip : zips) {
             try (ZipInputStream inputStream = new ZipInputStream(new ByteArrayInputStream(zip), StandardCharsets.UTF_8)) {
                 ZipEntry zipEntry;
@@ -362,9 +362,9 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
                     boolean found = false;
                     for (VersionArtifactConfig artifactConfig : availableConfigs) {
-                        String identifier = artifactConfig.identifier;
+                        String identifier = artifactConfig.identifier();
 
-                        if (!Pattern.compile(artifactConfig.fileNameFormat).matcher(fileName).matches()) {
+                        if (!Pattern.compile(artifactConfig.fileNameFormat()).matcher(fileName).matches()) {
                             continue;
                         }
 
@@ -460,7 +460,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
             return;
         }
 
-        if (!workflowRun.head_branch().equals(config.branch) || !workflowRun.event().equals("push")) {
+        if (!workflowRun.head_branch().equals(config.branch()) || !workflowRun.event().equals("push")) {
             return;
         }
 
@@ -489,7 +489,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
         try {
             try {
-                includeRun(workflowRun, config.versionsToKeepInMemory >= 1, true);
+                includeRun(workflowRun, config.versionsToKeepInMemory() >= 1, true);
             } catch (IOException | DigestException | NoSuchAlgorithmException e) {
                 throw new InclusionException(e);
             }

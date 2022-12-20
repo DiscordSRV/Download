@@ -73,11 +73,11 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected String describe() {
-        return repo() + ":" + config.name;
+        return repo() + ":" + config.name();
     }
 
     protected String repo() {
-        return config.repoOwner + "/" + config.repoName;
+        return config.repoOwner() + "/" + config.repoName();
     }
 
     protected String baseRepoApiUrl() {
@@ -85,7 +85,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected Path store() throws IOException {
-        Path path = Paths.get("storage", config.repoOwner, config.repoName, config.name);
+        Path path = Paths.get("storage", config.repoOwner(), config.repoName(), config.name());
         if (!Files.exists(path)) {
             Files.createDirectories(path);
         }
@@ -115,7 +115,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     @Override
     public String getUrl(HttpServletRequest request) {
         return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString()
-                + "/v2/" + repo() + "/" + config.name;
+                + "/v2/" + repo() + "/" + config.name();
     }
 
     private void securityCheck(
@@ -126,8 +126,8 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     ) {
         for (SecurityConfig securityConfig : securityConfigs) {
             if (check.test(securityConfig)) {
-                securityFailures.add(securityConfig.securityFailReason);
-                if (securityConfig.vulnerability) {
+                securityFailures.add(securityConfig.securityFailReason());
+                if (securityConfig.vulnerability()) {
                     vulnerability.set(true);
                 }
             }
@@ -138,14 +138,14 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     public VersionCheck checkVersion(String comparedTo) {
         List<String> securityFailures = new ArrayList<>();
         AtomicBoolean vulnerability = new AtomicBoolean(false);
-        List<SecurityConfig> securityConfigs = config.security != null ? config.security : Collections.emptyList();
+        List<SecurityConfig> securityConfigs = config.security() != null ? config.security() : Collections.emptyList();
 
-        securityCheck(securityFailures, vulnerability, securityConfigs, config -> config.versionIdentifier.equals(comparedTo));
+        securityCheck(securityFailures, vulnerability, securityConfigs, config -> config.versionIdentifier().equals(comparedTo));
 
         int versionsBehind = versionsBehind(comparedTo, version ->
                 securityCheck(securityFailures, vulnerability, securityConfigs, config -> {
                     String prefix = "<=";
-                    String versionIdentifier = config.versionIdentifier;
+                    String versionIdentifier = config.versionIdentifier();
                     return versionIdentifier.startsWith(prefix) && version.equals(versionIdentifier.substring(prefix.length()));
                 })
         );
@@ -209,7 +209,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     protected void expireOldestVersion() {
-        int versionsToKeep = config.versionsToKeep;
+        int versionsToKeep = config.versionsToKeep();
         if (versionsInOrder.size() > versionsToKeep) {
             Version version = versionsInOrder.get(versionsToKeep);
             if (version == null) {

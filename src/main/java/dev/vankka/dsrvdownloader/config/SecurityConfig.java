@@ -1,8 +1,7 @@
 package dev.vankka.dsrvdownloader.config;
 
-public class SecurityConfig {
-
-    public String versionIdentifier;
-    public boolean vulnerability;
-    public String securityFailReason;
-}
+public record SecurityConfig(
+        String versionIdentifier,
+        boolean vulnerability,
+        String securityFailReason
+) {}

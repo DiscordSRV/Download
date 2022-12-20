@@ -52,8 +52,8 @@ public class ConfigManager {
 
                     String host = request.url().host();
                     if ((host.equals("github.com") || host.equals("api.github.com"))
-                            && StringUtils.isNotEmpty(config.githubToken)) {
-                        builder.addHeader("Authorization", "Bearer " + config.githubToken);
+                            && StringUtils.isNotEmpty(config.githubToken())) {
+                        builder.addHeader("Authorization", "Bearer " + config.githubToken());
                     }
 
                     return chain.proceed(builder.build());

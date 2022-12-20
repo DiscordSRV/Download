@@ -2,11 +2,10 @@ package dev.vankka.dsrvdownloader.config;
 
 import java.util.List;
 
-public class Config {
-
-    public List<VersionChannelConfig> versionChannels;
-    public List<RepoConfig> repos;
-    public String githubToken;
-    public String discordWebhookUrl;
-
-}
+public record Config(
+        List<VersionChannelConfig> versionChannels,
+        String githubWebhookPath,
+        String githubWebhookSecret,
+        String githubToken,
+        String discordWebhookUrl
+) {}

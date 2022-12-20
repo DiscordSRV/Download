@@ -87,9 +87,9 @@ public class ReleaseChannel extends AbstractVersionChannel {
         Map<String, Release.Asset> assets = new HashMap<>();
 
         for (Release.Asset releaseAsset : release.assets()) {
-            for (VersionArtifactConfig artifact : config.artifacts) {
-                if (Pattern.compile(artifact.fileNameFormat).matcher(releaseAsset.name()).matches()) {
-                    assets.put(artifact.identifier, releaseAsset);
+            for (VersionArtifactConfig artifact : config.artifacts()) {
+                if (Pattern.compile(artifact.fileNameFormat()).matcher(releaseAsset.name()).matches()) {
+                    assets.put(artifact.identifier(), releaseAsset);
                 }
             }
         }
@@ -166,11 +166,11 @@ public class ReleaseChannel extends AbstractVersionChannel {
     }
 
     private void loadFiles() {
-        int max = Math.min(config.versionsToKeep, releases.size());
+        int max = Math.min(config.versionsToKeep(), releases.size());
         for (int i = 0; i < max; i++) {
             Release release = releases.get(i);
             try {
-                includeRelease(release, config.versionsToKeepInMemory > i, false);
+                includeRelease(release, config.versionsToKeepInMemory() > i, false);
             } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
                 setLastDiscordMessage(release.tag_name(), "[Boot] Failed to load release [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
             }
@@ -224,7 +224,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
         try {
             try {
-                includeRelease(release, config.versionsToKeepInMemory >= 1, true);
+                includeRelease(release, config.versionsToKeepInMemory() >= 1, true);
             } catch (IOException | DigestException | NoSuchAlgorithmException e) {
                 throw new InclusionException(e);
             }

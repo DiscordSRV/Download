@@ -1,9 +1,7 @@
 package dev.vankka.dsrvdownloader.config;
 
-public class VersionArtifactConfig {
-
-    public String identifier;
-    public String archiveNameFormat;
-    public String fileNameFormat;
-
-}
+public record VersionArtifactConfig(
+        String identifier,
+        String archiveNameFormat,
+        String fileNameFormat
+) {}

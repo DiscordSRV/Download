@@ -67,7 +67,7 @@ public class AuthController {
 
         String url = Objects.requireNonNull(HttpUrl.parse("https://discord.com/oauth2/authorize"))
                 .newBuilder()
-                .setQueryParameter("client_id", authConfig.clientId)
+                .setQueryParameter("client_id", authConfig.clientId())
                 .setQueryParameter("scope", "identify")
                 .addQueryParameter("redirect_uri", getRedirectUri(request))
                 .addQueryParameter("response_type", "code")
@@ -104,8 +104,8 @@ public class AuthController {
 
         Request codeRequest = new Request.Builder().url("https://discord.com/api/oauth2/token")
                 .post(new MultipartBody.Builder()
-                              .addFormDataPart("client_id", authConfig.clientId)
-                              .addFormDataPart("client_secret", authConfig.clientSecret)
+                              .addFormDataPart("client_id", authConfig.clientId())
+                              .addFormDataPart("client_secret", authConfig.clientSecret())
                               .addFormDataPart("grant_type", "authorization_code")
                               .addFormDataPart("code", code)
                               .addFormDataPart("redirect_uri", redirectUri)
@@ -147,7 +147,7 @@ public class AuthController {
                 JsonNode node = Downloader.OBJECT_MAPPER.readTree(responseBody.byteStream());
                 String id = node.get("id").asText();
 
-                if (!authConfig.discordUserIds.contains(id)) {
+                if (!authConfig.discordUserIds().contains(id)) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN);
                 }
             }
@@ -156,8 +156,8 @@ public class AuthController {
                     .url("https://discord.com/api/oauth2/token/revoke")
                     .post(new MultipartBody.Builder()
                                   .addFormDataPart("token", accessToken)
-                                  .addFormDataPart("client_id", authConfig.clientId)
-                                  .addFormDataPart("client_secret", authConfig.clientSecret)
+                                  .addFormDataPart("client_id", authConfig.clientId())
+                                  .addFormDataPart("client_secret", authConfig.clientSecret())
                                   .setType(MultipartBody.FORM)
                                   .build())
                     .build();
