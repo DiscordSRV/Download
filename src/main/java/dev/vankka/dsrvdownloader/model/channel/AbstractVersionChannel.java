@@ -49,7 +49,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         this.messages = new ConcurrentHashMap<>();
     }
 
-    protected void cleanupDirectory() {
+    public void cleanupDirectory(boolean ignoreVersions) {
         try {
             Path store = store();
 
@@ -58,7 +58,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
                     List<Path> toDelete;
                     try (Stream<Path> files = Files.list(folder)) {
                         toDelete = files
-                                .filter(path -> versions.values().stream()
+                                .filter(path -> ignoreVersions || versions.values().stream()
                                         .noneMatch(ver -> ver.getArtifactsByIdentifier().values()
                                                 .stream()
                                                 .anyMatch(art -> path.equals(art.getFile()) || path.equals(art.getMetaFile()))

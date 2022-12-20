@@ -4,6 +4,7 @@ import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.Config;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
+import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,6 +48,20 @@ public class ConfigController {
     @ResponseStatus(code = HttpStatus.OK, reason = "Reloaded")
     public void reloadChannels() {
         try {
+            channelManager.reloadVersionChannels();
+        } catch (Throwable e) {
+            throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to reload channels\n" + ExceptionUtils.getStackTrace(e));
+        }
+    }
+
+    @PostMapping(path = "/admin/redownload")
+    @ResponseStatus(code = HttpStatus.OK, reason = "Reloaded")
+    public void reDownload() {
+        try {
+            for (VersionChannel channel : channelManager.versionChannels()) {
+                channel.cleanupDirectory(true);
+                channel.refresh();
+            }
             channelManager.reloadVersionChannels();
         } catch (Throwable e) {
             throw new ResponseStatusException(HttpStatus.I_AM_A_TEAPOT, "Failed to reload channels\n" + ExceptionUtils.getStackTrace(e));

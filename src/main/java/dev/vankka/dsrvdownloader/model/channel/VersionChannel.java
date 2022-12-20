@@ -15,6 +15,8 @@ public interface VersionChannel {
     long EXPIRE_AFTER = TimeUnit.HOURS.toMillis(2);
     String LATEST_IDENTIFIER = "latest";
 
+    void cleanupDirectory(boolean ignoreVersions);
+    void refresh();
     Map<String, Version> versionsByIdentifier();
     String getUrl(HttpServletRequest request);
     ObjectNode versionResponse(HttpServletRequest request, boolean preferIdentifier);

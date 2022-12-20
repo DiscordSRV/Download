@@ -39,15 +39,16 @@ public class ReleaseChannel extends AbstractVersionChannel {
 
     public ReleaseChannel(ConfigManager configManager, DiscordWebhook discordWebhook, VersionChannelConfig config) {
         super(configManager, discordWebhook, config);
-        updateReleases();
+        refresh();
         if (releases == null || releases.isEmpty()) {
             return;
         }
         loadFiles();
-        cleanupDirectory();
+        cleanupDirectory(false);
     }
 
-    private void updateReleases() {
+    @Override
+    public void refresh() {
         releases = new ArrayList<>();
 
         int page = 1;
@@ -172,7 +173,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             try {
                 includeRelease(release, config.versionsToKeepInMemory() > i, false);
             } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                setLastDiscordMessage(release.tag_name(), "[Boot] Failed to load release " + release.tag_name() + " [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
+                setLastDiscordMessage(release.tag_name(), "[Refresh] Failed to load release " + release.tag_name() + " [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
             }
         }
     }

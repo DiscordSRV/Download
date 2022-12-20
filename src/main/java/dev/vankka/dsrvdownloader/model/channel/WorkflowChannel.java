@@ -57,7 +57,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         if (workflow == null || workflowRuns == null || workflowRuns.isEmpty()) {
             return;
         }
-        loadFilesAndCleanupStore();
+        refresh();
     }
 
     private void updateWorkflows() {
@@ -133,7 +133,8 @@ public class WorkflowChannel extends AbstractVersionChannel {
         }
     }
 
-    private void loadFilesAndCleanupStore() {
+    @Override
+    public void refresh() {
         try {
             Path store = store();
 
@@ -245,7 +246,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 try {
                     includeRun(run, i < config.versionsToKeepInMemory(), false);
                 } catch (IOException | InclusionException | DigestException | NoSuchAlgorithmException e) {
-                    setLastDiscordMessage(run.head_sha(), "[Boot] Failed to load workflow for " + hash + " [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
+                    setLastDiscordMessage(run.head_sha(), "[Refresh] Failed to load workflow for " + hash + " [`" + describe() + "`]", ExceptionUtils.getStackTrace(e));
                 }
             }
 
