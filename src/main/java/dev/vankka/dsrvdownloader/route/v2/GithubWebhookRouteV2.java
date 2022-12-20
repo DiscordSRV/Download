@@ -10,6 +10,7 @@ import org.apache.tomcat.util.buf.HexUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -60,8 +61,16 @@ public class GithubWebhookRouteV2 {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
+        if (event.equals("ping")) {
+            return;
+        }
+
         JsonNode node = Downloader.OBJECT_MAPPER.readTree(body);
         JsonNode repository = node.get("repository");
+        if (repository.isNull()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+
         String repoOwner = repository.get("owner").get("login").asText();
         String repoName = repository.get("name").asText();
 
