@@ -2,7 +2,10 @@ package dev.vankka.dsrvdownloader.route.v2;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
+import dev.vankka.dsrvdownloader.model.ErrorModel;
+import dev.vankka.dsrvdownloader.model.VersionCheck;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
+import io.swagger.annotations.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import javax.servlet.http.HttpServletRequest;
 
 @RestController
+@Api(tags = "v2")
 public class VersionsRouteV2 {
 
     private final ChannelManager channelManager;
@@ -26,10 +30,15 @@ public class VersionsRouteV2 {
             path = "/v2/{repoOwner}/{repoName}/{releaseChannel}/versions",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @ApiOperation(value = "Versions", notes = "Versions")
+    @ApiResponses({
+            @ApiResponse(code = 200 /* OK */, message = "Success", response = VersionCheck.class),
+            @ApiResponse(code = 400 /* Bad Request */, message = "Bad Request", response = ErrorModel.class)
+    })
     public ObjectNode handle(
-            @PathVariable String repoOwner,
-            @PathVariable String repoName,
-            @PathVariable String releaseChannel,
+            @PathVariable @ApiParam(example = "DiscordSRV") String repoOwner,
+            @PathVariable @ApiParam(example = "DiscordSRV") String repoName,
+            @PathVariable @ApiParam(example = "release") String releaseChannel,
             @RequestParam(name = "preferIdentifier", defaultValue = "false") boolean preferIdentifier,
             HttpServletRequest request
     ) {

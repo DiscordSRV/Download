@@ -1,7 +1,10 @@
 package dev.vankka.dsrvdownloader.route.v1;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.view.RedirectView;
@@ -32,21 +35,18 @@ public class V1Routes {
     }
 
     @PostMapping(path = "/github-webhook")
-    @ResponseStatus(HttpStatus.GONE)
     @Deprecated
     public void githubWebhook() {
         throw new ResponseStatusException(HttpStatus.GONE);
     }
 
     @GetMapping(path = "/")
-    @ResponseStatus(HttpStatus.FOUND)
     @Deprecated
     public View rootRedirect() {
         return new RedirectView("/release");
     }
 
     @GetMapping(path = "/{type}")
-    @ResponseStatus(HttpStatus.FOUND)
     @Deprecated
     public Object getJar(@PathVariable String type) {
         if (type.equalsIgnoreCase("release")) {

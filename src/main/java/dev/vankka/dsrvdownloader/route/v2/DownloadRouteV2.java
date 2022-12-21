@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.StatsManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
+import dev.vankka.dsrvdownloader.model.ErrorModel;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import dev.vankka.dsrvdownloader.util.RequestSourceUtil;
@@ -12,13 +13,11 @@ import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.caffeine.CaffeineProxyManager;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.distributed.remote.RemoteBucketState;
+import io.swagger.annotations.*;
 import org.apache.commons.io.IOUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.view.RedirectView;
 
@@ -31,6 +30,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 @RestController
+@Api(tags = "v2")
 public class DownloadRouteV2 {
 
     private final ChannelManager channelManager;
@@ -52,14 +52,22 @@ public class DownloadRouteV2 {
 
     @RequestMapping(
             path = "/v2/{repoOwner}/{repoName}/{releaseChannel}/download/{identifier}/{artifactIdentifier}",
-            produces = MediaType.APPLICATION_OCTET_STREAM_VALUE
+            produces = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+            method = {RequestMethod.GET, RequestMethod.POST}
     )
+    @ApiOperation(value = "Download", notes = "Download a version")
+    @ApiResponses({
+            @ApiResponse(code = 200 /* OK */, message = "Success"),
+            @ApiResponse(code = 302 /* Found */, message = "Redirect"),
+            @ApiResponse(code = 307 /* Temporary Redirect */, message = "Redirect"),
+            @ApiResponse(code = 400 /* Bad Request */, message = "Bad Request", response = ErrorModel.class)
+    })
     public Object handle(
-            @PathVariable String repoOwner,
-            @PathVariable String repoName,
-            @PathVariable String releaseChannel,
-            @PathVariable String identifier,
-            @PathVariable String artifactIdentifier,
+            @PathVariable @ApiParam(example = "DiscordSRV") String repoOwner,
+            @PathVariable @ApiParam(example = "DiscordSRV") String repoName,
+            @PathVariable @ApiParam(example = "release") String releaseChannel,
+            @PathVariable @ApiParam(example = "latest") String identifier,
+            @PathVariable @ApiParam(example = "jar") String artifactIdentifier,
             @RequestParam(name = "preferRedirect", defaultValue = "true") boolean preferRedirect,
             HttpServletRequest request,
             HttpServletResponse response
