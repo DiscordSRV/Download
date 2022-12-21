@@ -12,7 +12,7 @@ public final class UrlUtil {
     public static String getUrl(HttpServletRequest request) {
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromContextPath(request);
         UriComponents components = builder.build();
-        if ("http".equals(components.getScheme()) && "localhost".equals(components.getHost())) {
+        if ("http".equals(components.getScheme()) && !"localhost".equals(components.getHost())) {
             builder.scheme("https");
         }
 
