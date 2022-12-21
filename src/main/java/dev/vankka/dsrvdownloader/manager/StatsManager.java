@@ -2,7 +2,10 @@ package dev.vankka.dsrvdownloader.manager;
 
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
+import dev.vankka.dsrvdownloader.discord.DiscordMessage;
+import dev.vankka.dsrvdownloader.discord.DiscordWebhook;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
@@ -22,12 +25,15 @@ import java.util.regex.Pattern;
 @SuppressWarnings("SpellCheckingInspection")
 public class StatsManager {
 
+    private final DiscordWebhook discordWebhook;
     private final ScheduledExecutorService executorService;
     private final Connection connection;
     private final Map<Artifact, AtomicInteger> artifacts = new LinkedHashMap<>();
+    private final Map<String, AtomicInteger> userAgents = new LinkedHashMap<>();
 
-    public StatsManager() throws SQLException, ClassNotFoundException {
+    public StatsManager(DiscordWebhook discordWebhook) throws SQLException, ClassNotFoundException {
         Class.forName("org.h2.Driver");
+        this.discordWebhook = discordWebhook;
         this.executorService = Executors.newSingleThreadScheduledExecutor();
         this.connection = DriverManager.getConnection("jdbc:h2:./stats");
 
@@ -53,7 +59,41 @@ public class StatsManager {
                                       + ");");
         }
 
-        executorService.scheduleAtFixedRate(this::flushStats, 10, 10, TimeUnit.SECONDS);
+        executorService.scheduleAtFixedRate(this::flushStats, 30, 30, TimeUnit.SECONDS);
+        executorService.scheduleAtFixedRate(this::logTopUserAgents, 1, 1, TimeUnit.HOURS);
+    }
+
+    public void userAgent(String userAgent) {
+        if (userAgent == null) {
+            userAgent = "null";
+        }
+        synchronized (userAgents) {
+            this.userAgents.computeIfAbsent(userAgent, key -> new AtomicInteger(0)).getAndIncrement();
+        }
+    }
+
+    private void logTopUserAgents() {
+        Map<String, AtomicInteger> userAgents;
+        synchronized (this.userAgents) {
+            userAgents = new LinkedHashMap<>(this.userAgents);
+            this.userAgents.clear();
+        }
+        if (userAgents.isEmpty()) {
+            return;
+        }
+
+        StringBuilder builder = new StringBuilder("User agents ```\n");
+        String end = "```";
+        for (Map.Entry<String, AtomicInteger> entry : userAgents.entrySet()) {
+            String line = StringUtils.substring(entry.getKey(), 0, 1000) + ": " + entry.getValue() + "\n";
+            if (builder.length() + line.length() + end.length() > 2000) {
+                discordWebhook.processMessage(new DiscordMessage().setMessage(builder + end, null));
+                builder = new StringBuilder("```\n");
+            }
+
+            builder.append(line);
+        }
+        discordWebhook.processMessage(new DiscordMessage().setMessage(builder + end, null));
     }
 
     public void increment(VersionChannel versionChannel, String artifactIdentifier, String version) {

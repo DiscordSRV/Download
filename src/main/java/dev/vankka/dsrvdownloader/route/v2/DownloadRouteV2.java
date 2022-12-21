@@ -69,6 +69,7 @@ public class DownloadRouteV2 {
             @PathVariable @ApiParam(example = "latest") String identifier,
             @PathVariable @ApiParam(example = "jar") String artifactIdentifier,
             @RequestParam(name = "preferRedirect", defaultValue = "true") boolean preferRedirect,
+            @RequestHeader(name = "User-Agent", required = false) String userAgent,
             HttpServletRequest request,
             HttpServletResponse response
     ) {
@@ -133,6 +134,7 @@ public class DownloadRouteV2 {
             }
 
             statsManager.increment(channel, artifact.getIdentifier(), version.getIdentifier());
+            statsManager.userAgent(userAgent);
         } catch (IOException ignored) {}
         return null;
     }
