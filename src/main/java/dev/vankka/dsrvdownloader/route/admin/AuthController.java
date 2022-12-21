@@ -8,6 +8,7 @@ import dev.vankka.dsrvdownloader.manager.AuthManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.util.HttpContentUtil;
 import dev.vankka.dsrvdownloader.util.RequestSourceUtil;
+import dev.vankka.dsrvdownloader.util.UrlUtil;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.caffeine.CaffeineProxyManager;
@@ -22,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.View;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpServletRequest;
@@ -52,10 +52,8 @@ public class AuthController {
         this.configManager = configManager;
     }
 
-    @SuppressWarnings("HttpUrlsUsage")
     private String getRedirectUri(HttpServletRequest request) {
-        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString()
-                .replace("http://", "https://") + TOKEN_PATH;
+        return UrlUtil.getUrl(request) + TOKEN_PATH;
     }
 
     private String cookie(String state) {

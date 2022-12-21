@@ -11,7 +11,7 @@ import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.VersionCheck;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import dev.vankka.dsrvdownloader.util.UrlUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -134,8 +134,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
 
     @Override
     public String getUrl(HttpServletRequest request) {
-        return ServletUriComponentsBuilder.fromContextPath(request).build().toUriString()
-                + "/v2/" + repo() + "/" + config.name();
+        return UrlUtil.getUrl(request) + "/v2/" + repo() + "/" + config.name();
     }
 
     private void securityCheck(
