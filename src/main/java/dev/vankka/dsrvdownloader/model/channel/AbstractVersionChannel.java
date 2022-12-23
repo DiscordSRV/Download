@@ -1,7 +1,5 @@
 package dev.vankka.dsrvdownloader.model.channel;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.SecurityConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
@@ -11,6 +9,7 @@ import dev.vankka.dsrvdownloader.manager.ConfigManager;
 import dev.vankka.dsrvdownloader.model.Artifact;
 import dev.vankka.dsrvdownloader.model.Version;
 import dev.vankka.dsrvdownloader.model.VersionCheck;
+import dev.vankka.dsrvdownloader.model.VersionResponse;
 import dev.vankka.dsrvdownloader.util.UrlUtil;
 
 import javax.servlet.http.HttpServletRequest;
@@ -191,40 +190,42 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     protected abstract String amountType(int amount);
 
     @Override
-    public ObjectNode versionResponse(HttpServletRequest request, boolean preferIdentifier) {
+    public VersionResponse versionResponse(HttpServletRequest request, boolean preferIdentifier) {
         String baseUrl = getUrl(request) + "/download/";
 
-        ObjectNode response = Downloader.OBJECT_MAPPER.createObjectNode();
-        response.put("latest_base_url", baseUrl + "latest/");
-
-        ArrayNode versions = response.putArray("versions");
+        List<VersionResponse.Version> versions = new ArrayList<>();
         for (Version version : versionsInOrder) {
             if (version.getExpiry() != null) {
                 continue;
             }
 
-            ObjectNode objectNode = versions.addObject();
-            objectNode.put("identifier", version.getIdentifier());
-            objectNode.put("description", version.getDescription());
-
-            ObjectNode artifacts = objectNode.putObject("artifacts");
-
+            List<VersionResponse.Artifact> artifacts = new ArrayList<>();
             for (Map.Entry<String, Artifact> artifactEntry : version.getArtifactsByIdentifier().entrySet()) {
                 String artifactIdentifier = artifactEntry.getKey();
                 Artifact artifact = artifactEntry.getValue();
 
-                ObjectNode artifactNode = artifacts.putObject(artifactEntry.getKey());
-                artifactNode.put("file_name", artifact.getFileName());
-                artifactNode.put("size", artifact.getSize());
-                artifactNode.put("download_url", baseUrl + version.getIdentifier() + "/"
-                        + (preferIdentifier ? artifactIdentifier : artifact.getFileName()));
 
-                ObjectNode hashNode = artifactNode.putObject("hashes");
-                hashNode.put("sha256", artifact.getSha256());
+                VersionResponse.Hashes hashes = new VersionResponse.Hashes(
+                        artifact.getSha256()
+                );
+
+                String url = baseUrl + version.getIdentifier() + "/" + (preferIdentifier ? artifactIdentifier : artifact.getFileName());
+                artifacts.add(new VersionResponse.Artifact(
+                        artifact.getFileName(),
+                        artifact.getSize(),
+                        url,
+                        hashes
+                ));
             }
+
+            versions.add(new VersionResponse.Version(
+                    version.getIdentifier(),
+                    version.getDescription(),
+                    artifacts
+            ));
         }
 
-        return response;
+        return new VersionResponse(baseUrl + "latest/", versions);
     }
 
     protected void expireOldestVersion() {
