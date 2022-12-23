@@ -33,7 +33,12 @@ public class IO implements AutoCloseable {
 
         OutputStream finalStream = outputStream;
         streams.add(finalStream);
-        outputs.add((bytes, size) -> finalStream.write(bytes, 0, size));
+        outputs.add((bytes, size) -> {
+            finalStream.write(bytes, 0, size);
+            if (size != BUFFER_SIZE) {
+                finalStream.flush();
+            }
+        });
         return this;
     }
 
