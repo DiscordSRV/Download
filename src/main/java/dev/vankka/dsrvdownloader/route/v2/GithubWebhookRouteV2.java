@@ -2,6 +2,7 @@ package dev.vankka.dsrvdownloader.route.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.vankka.dsrvdownloader.Downloader;
+import dev.vankka.dsrvdownloader.config.GithubWebhookConfig;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
 import dev.vankka.dsrvdownloader.manager.ChannelManager;
 import dev.vankka.dsrvdownloader.manager.ConfigManager;
@@ -42,7 +43,14 @@ public class GithubWebhookRouteV2 {
             @RequestHeader(name = "X-GitHub-Event") String event,
             @RequestBody byte[] body
     ) throws Exception {
-        if (!configManager.config().githubWebhookPath().equalsIgnoreCase(route)) {
+        GithubWebhookConfig webhookConfig = null;
+        for (GithubWebhookConfig githubWebhook : configManager.config().githubWebhooks()) {
+            if (githubWebhook.path().equalsIgnoreCase(route)) {
+                webhookConfig = githubWebhook;
+                break;
+            }
+        }
+        if (webhookConfig == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
@@ -50,7 +58,7 @@ public class GithubWebhookRouteV2 {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        byte[] bytes = hmac256(configManager.config().githubWebhookSecret().getBytes(StandardCharsets.UTF_8), body);
+        byte[] bytes = hmac256(webhookConfig.secret().getBytes(StandardCharsets.UTF_8), body);
         if (bytes == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }

@@ -4,8 +4,8 @@ import java.util.List;
 
 public record Config(
         List<VersionChannelConfig> versionChannels,
-        String githubWebhookPath,
-        String githubWebhookSecret,
+        List<GithubWebhookConfig> githubWebhooks,
         String githubToken,
-        String discordWebhookUrl
+        String discordWebhookUrl,
+        String rootRedirectUrl
 ) {}

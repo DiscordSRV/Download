@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.view.RedirectView;
 
 import java.io.IOException;
@@ -38,12 +37,6 @@ public class V1Routes {
     @Deprecated
     public void githubWebhook() {
         throw new ResponseStatusException(HttpStatus.GONE);
-    }
-
-    @GetMapping(path = "/")
-    @Deprecated
-    public View rootRedirect() {
-        return new RedirectView("/release");
     }
 
     @GetMapping(path = "/{type}")
