@@ -24,10 +24,11 @@ public class StatsController {
             @RequestParam(name = "channel", required = false) String channel,
             @RequestParam(name = "artifact", required = false) String artifact,
             @RequestParam(name = "version", required = false) String version,
+            @RequestParam(name = "useragent", required = false) String useragent,
             @RequestParam(name = "from", required = false) String from,
             @RequestParam(name = "to", required = false) String to,
             @RequestParam(name = "limit", defaultValue = "50") int limit
     ) throws SQLException {
-        return statsManager.query(group, repoOwner, repoName, channel, artifact, version, from, to, limit);
+        return statsManager.query(group, repoOwner, repoName, channel, artifact, version, useragent, from, to, limit);
     }
 }

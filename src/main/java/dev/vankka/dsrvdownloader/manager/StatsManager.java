@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @SuppressWarnings("SpellCheckingInspection")
@@ -225,6 +226,7 @@ public class StatsManager {
             String channel,
             String artifact,
             String version,
+            String useragent,
             String from,
             String to
     ) {
@@ -236,15 +238,26 @@ public class StatsManager {
                 Pair.of("reponame", repoName),
                 Pair.of("channel", channel),
                 Pair.of("artifact", artifact),
-                Pair.of("version", version)
+                Pair.of("version", version),
+                Pair.of("useragent", useragent)
         )) {
+            String column = pair.getKey();
             String value = pair.getValue();
             if (value == null) {
                 continue;
             }
 
-            requirements.add(pair.getKey() + " = ?");
-            preparation.add((statement, i) -> statement.setString(i, value));
+            String[] values = value.split(" ");
+            requirements.add("(" + Arrays.stream(values).map(key -> column + " = ?").collect(Collectors.joining(" or ")) + ")");
+            for (String v : values) {
+                if (column.equals("useragent")) {
+                    try {
+                        v = ((Byte) UserAgent.valueOf(v).sql()).toString();
+                    } catch (IllegalArgumentException ignored) {}
+                }
+                String finalValue = v;
+                preparation.add((statement, i) -> statement.setString(i, finalValue));
+            }
         }
 
         Date fromDate = date(from);
@@ -276,6 +289,7 @@ public class StatsManager {
             String channel,
             String artifact,
             String version,
+            String useragent,
             String from,
             String to,
             int limit
@@ -287,7 +301,7 @@ public class StatsManager {
             limit = 5000;
         }
 
-        List<String> groups = group == null ? Collections.emptyList() : new ArrayList<>(Arrays.asList(group.split(" ")));
+        List<String> groups = group == null ? Collections.emptyList() : Arrays.asList(group.split(" "));
         StringBuilder groupSelect = new StringBuilder();
         if (!groups.isEmpty()) {
             for (int i = 0; i < groups.size(); i++) {
@@ -295,7 +309,7 @@ public class StatsManager {
             }
         }
 
-        Pair<String, List<PreparedConsumer>> where = where(repoOwner, repoName, channel, artifact, version, from, to);
+        Pair<String, List<PreparedConsumer>> where = where(repoOwner, repoName, channel, artifact, version, useragent, from, to);
         String sql = "select " + groupSelect + " sum(count) as sum from stats "
                 + "inner join artifact on artifact.artifactid = stats.artifactid "
                 + where.getKey() + " " + (groups.isEmpty() ? "" : "group by " + (String.join(", ", groups))) + " limit ?";
