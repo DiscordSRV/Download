@@ -1,11 +1,11 @@
 package dev.vankka.dsrvdownloader.manager;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.vankka.dsrvdownloader.Downloader;
 import dev.vankka.dsrvdownloader.config.VersionChannelConfig;
-import dev.vankka.dsrvdownloader.discord.DiscordMessage;
-import dev.vankka.dsrvdownloader.discord.DiscordWebhook;
+import dev.vankka.dsrvdownloader.model.UserAgent;
 import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
@@ -25,15 +25,12 @@ import java.util.regex.Pattern;
 @SuppressWarnings("SpellCheckingInspection")
 public class StatsManager {
 
-    private final DiscordWebhook discordWebhook;
     private final ScheduledExecutorService executorService;
     private final Connection connection;
-    private final Map<Artifact, AtomicInteger> artifacts = new LinkedHashMap<>();
-    private final Map<String, AtomicInteger> userAgents = new LinkedHashMap<>();
+    private final Map<Artifact, EnumMap<UserAgent, AtomicInteger>> artifacts = new LinkedHashMap<>();
 
-    public StatsManager(DiscordWebhook discordWebhook) throws SQLException, ClassNotFoundException {
+    public StatsManager() throws SQLException, ClassNotFoundException {
         Class.forName("org.h2.Driver");
-        this.discordWebhook = discordWebhook;
         this.executorService = Executors.newSingleThreadScheduledExecutor();
         this.connection = DriverManager.getConnection("jdbc:h2:./stats");
 
@@ -52,66 +49,54 @@ public class StatsManager {
                                       + "statsid bigint auto_increment,"
                                       + "artifactid bigint,"
                                       + "version character(256),"
+                                      + "useragent tinyint default -1,"
                                       + "date date,"
                                       + "count int,"
                                       + "primary key (statsid),"
                                       + "foreign key (artifactid) references artifact(artifactid)"
                                       + ");");
         }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("alter table stats add column if not exists useragent tinyint default -1");
+        }
 
         executorService.scheduleAtFixedRate(this::flushStats, 30, 30, TimeUnit.SECONDS);
-        executorService.scheduleAtFixedRate(this::logTopUserAgents, 1, 1, TimeUnit.HOURS);
     }
 
-    public void userAgent(String userAgent) {
-        if (userAgent == null) {
-            userAgent = "null";
-        }
-        synchronized (userAgents) {
-            this.userAgents.computeIfAbsent(userAgent, key -> new AtomicInteger(0)).getAndIncrement();
-        }
-    }
-
-    private void logTopUserAgents() {
-        Map<String, AtomicInteger> userAgents;
-        synchronized (this.userAgents) {
-            userAgents = new LinkedHashMap<>(this.userAgents);
-            this.userAgents.clear();
-        }
-        if (userAgents.isEmpty()) {
-            return;
-        }
-
-        StringBuilder builder = new StringBuilder("User agents ```\n");
-        String end = "```";
-        for (Map.Entry<String, AtomicInteger> entry : userAgents.entrySet()) {
-            String line = StringUtils.substring(entry.getKey(), 0, 1000) + ": " + entry.getValue() + "\n";
-            if (builder.length() + line.length() + end.length() > 2000) {
-                discordWebhook.processMessage(new DiscordMessage().setMessage(builder + end, null));
-                builder = new StringBuilder("```\n");
-            }
-
-            builder.append(line);
-        }
-        discordWebhook.processMessage(new DiscordMessage().setMessage(builder + end, null));
-    }
-
-    public void increment(VersionChannel versionChannel, String artifactIdentifier, String version) {
+    public void increment(VersionChannel versionChannel, String userAgent, String artifactIdentifier, String version) {
         VersionChannelConfig config = versionChannel.getConfig();
         Artifact artifact = new Artifact(config.repoOwner(), config.repoName(), config.name(), artifactIdentifier, version);
-        alter(artifact, AtomicInteger::getAndIncrement);
+        alter(artifact, parseUA(userAgent), AtomicInteger::getAndIncrement);
     }
 
-    private void alter(Artifact artifact, Consumer<AtomicInteger> consumer) {
+    private UserAgent parseUA(String userAgent) {
+        if (userAgent == null) {
+            return UserAgent.UNKNOWN;
+        }
+
+        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent
+
+        if (userAgent.toLowerCase().contains("bot")) {
+            return UserAgent.LIKELY_SCRAPER;
+        } else if (userAgent.startsWith("Mozilla/")) {
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent/Firefox
+            return UserAgent.LIKELY_MANUAL;
+        }
+
+        return UserAgent.LIKELY_AUTOMATED;
+    }
+
+    private void alter(Artifact artifact, UserAgent userAgent, Consumer<AtomicInteger> consumer) {
         synchronized (artifacts) {
             consumer.accept(
-                    artifacts.computeIfAbsent(artifact, key -> new AtomicInteger(0))
+                    artifacts.computeIfAbsent(artifact, key -> new EnumMap<>(UserAgent.class))
+                            .computeIfAbsent(userAgent, key -> new AtomicInteger(0))
             );
         }
     }
 
     private void flushStats() {
-        Map<Artifact, AtomicInteger> artifacts;
+        Map<Artifact, EnumMap<UserAgent, AtomicInteger>> artifacts;
         synchronized (this.artifacts) {
             artifacts = new ConcurrentHashMap<>(this.artifacts);
             this.artifacts.clear();
@@ -120,9 +105,8 @@ public class StatsManager {
         Date today = new Date(System.currentTimeMillis());
 
         try {
-            for (Map.Entry<Artifact, AtomicInteger> entry : artifacts.entrySet()) {
-                Artifact artifact = entry.getKey();
-                AtomicInteger amount = entry.getValue();
+            for (Map.Entry<Artifact, EnumMap<UserAgent, AtomicInteger>> artifactEntry : artifacts.entrySet()) {
+                Artifact artifact = artifactEntry.getKey();
 
                 Long artifactId = null;
                 for (int attempt = 0; true; attempt++) {
@@ -163,37 +147,43 @@ public class StatsManager {
                     throw new IllegalStateException("artifactId may not be null after loop");
                 }
 
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "select statsid, count from stats where artifactid = ? and version = ? and date = ?")) {
-                    statement.setLong(1, artifactId);
-                    statement.setString(2, artifact.getVersion());
-                    statement.setDate(3, today);
-                    try (ResultSet resultSet = statement.executeQuery()) {
-                        if (resultSet.next()) {
-                            long statsId = resultSet.getLong("statsid");
-                            int count = resultSet.getInt("count");
+                for (Map.Entry<UserAgent, AtomicInteger> entry : artifactEntry.getValue().entrySet()) {
+                    UserAgent userAgent = entry.getKey();
+                    AtomicInteger amount = entry.getValue();
+                    try (PreparedStatement statement = connection.prepareStatement(
+                            "select statsid, count from stats where artifactid = ? and version = ? and useragent = ? and date = ?")) {
+                        statement.setLong(1, artifactId);
+                        statement.setString(2, artifact.getVersion());
+                        statement.setByte(3, userAgent.sql());
+                        statement.setDate(4, today);
+                        try (ResultSet resultSet = statement.executeQuery()) {
+                            if (resultSet.next()) {
+                                long statsId = resultSet.getLong("statsid");
+                                int count = resultSet.getInt("count");
 
-                            try (PreparedStatement update = connection.prepareStatement(
-                                    "update stats set count = ? where statsid = ?")) {
-                                update.setInt(1, count + amount.get());
-                                update.setLong(2, statsId);
+                                try (PreparedStatement update = connection.prepareStatement(
+                                        "update stats set count = ? where statsid = ?")) {
+                                    update.setInt(1, count + amount.get());
+                                    update.setLong(2, statsId);
 
-                                int rows;
-                                if ((rows = update.executeUpdate()) != 1) {
-                                    throw new SQLException("Failed to update exactly 1 row, actually: " + rows);
+                                    int rows;
+                                    if ((rows = update.executeUpdate()) != 1) {
+                                        throw new SQLException("Failed to update exactly 1 row, actually: " + rows);
+                                    }
                                 }
-                            }
-                        } else {
-                            try (PreparedStatement insert = connection.prepareStatement(
-                                    "insert into stats (artifactid, version, date, count) values (?, ?, ?, ?)")) {
-                                insert.setLong(1, artifactId);
-                                insert.setString(2, artifact.getVersion());
-                                insert.setDate(3, today);
-                                insert.setInt(4, amount.get());
+                            } else {
+                                try (PreparedStatement insert = connection.prepareStatement(
+                                        "insert into stats (artifactid, version, useragent, date, count) values (?, ?, ?, ?, ?)")) {
+                                    insert.setLong(1, artifactId);
+                                    insert.setString(2, artifact.getVersion());
+                                    insert.setByte(3, userAgent.sql());
+                                    insert.setDate(4, today);
+                                    insert.setInt(5, amount.get());
 
-                                int rows;
-                                if ((rows = insert.executeUpdate()) != 1) {
-                                    throw new SQLException("Failed to update exactly 1 row, actually: " + rows);
+                                    int rows;
+                                    if ((rows = insert.executeUpdate()) != 1) {
+                                        throw new SQLException("Failed to update exactly 1 row, actually: " + rows);
+                                    }
                                 }
                             }
                         }
@@ -279,7 +269,7 @@ public class StatsManager {
         );
     }
 
-    public Map<String, Integer> query(
+    public JsonNode query(
             String group,
             String repoOwner,
             String repoName,
@@ -290,35 +280,72 @@ public class StatsManager {
             String to,
             int limit
     ) throws SQLException {
-        if (group != null && !Pattern.compile("[a-zA-Z]+").matcher(group).matches()) {
+        if (group != null && !Pattern.compile("[a-zA-Z ]+").matcher(group).matches()) {
             throw new IllegalArgumentException("group is not a-Z");
         }
+        if (limit > 5000) {
+            limit = 5000;
+        }
 
-        Map<String, Integer> results = new LinkedHashMap<>();
+        List<String> groups = group == null ? Collections.emptyList() : new ArrayList<>(Arrays.asList(group.split(" ")));
+        StringBuilder groupSelect = new StringBuilder();
+        if (!groups.isEmpty()) {
+            for (int i = 0; i < groups.size(); i++) {
+                groupSelect.append(groups.get(i)).append(" as group").append(i).append(", ");
+            }
+        }
 
         Pair<String, List<PreparedConsumer>> where = where(repoOwner, repoName, channel, artifact, version, from, to);
-        String sql = "select " + (group != null ? group + " as grouping," : "") + " sum(count) as sum from stats "
+        String sql = "select " + groupSelect + " sum(count) as sum from stats "
                 + "inner join artifact on artifact.artifactid = stats.artifactid "
-                + where.getKey() + " " + (group != null ? "group by " + group : "") + " limit ?";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            int i = 0;
-            for (PreparedConsumer consumer : where.getValue()) {
-                consumer.consume(statement, ++i);
-            }
-            statement.setInt(++i, limit);
+                + where.getKey() + " " + (groups.isEmpty() ? "" : "group by " + (String.join(", ", groups))) + " limit ?";
 
+        ObjectNode node = Downloader.OBJECT_MAPPER.createObjectNode();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            int param = 0;
+            for (PreparedConsumer consumer : where.getValue()) {
+                consumer.consume(statement, ++param);
+            }
+            statement.setInt(++param, limit);
+
+            int count = 0;
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    if (group != null) {
-                        results.put(resultSet.getString("grouping").trim(), resultSet.getInt("sum"));
+                    count++;
+                    if (groups.isEmpty()) {
+                        node.put("total_downloads", resultSet.getInt("sum"));
                     } else {
-                        results.put("sum", resultSet.getInt("sum"));
+                        ObjectNode next = node;
+                        for (int i = 0; i < groups.size(); i++) {
+                            String value = resultSet.getString("group" + i).trim();
+
+                            String groupName = groups.get(i);
+                            if (groupName.equalsIgnoreCase("useragent")) {
+                                try {
+                                    value = UserAgent.getBySql(value).name();
+                                } catch (IllegalArgumentException ignored) {}
+                            }
+
+                            if (groups.size() - 1 == i) {
+                                // Last
+                                next.put(value, resultSet.getInt("sum"));
+                                continue;
+                            }
+
+                            // Create/get object node
+                            JsonNode obj = next.get(value);
+                            if (obj == null) {
+                                obj = next.putObject(value);
+                            }
+                            next = ((ObjectNode) obj);
+                        }
                     }
                 }
             }
+            node.put("rows", count);
         }
 
-        return results;
+        return node;
     }
 
     @Bean(destroyMethod = "close")

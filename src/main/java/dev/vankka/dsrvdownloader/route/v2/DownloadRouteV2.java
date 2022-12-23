@@ -133,8 +133,7 @@ public class DownloadRouteV2 {
                 }
             }
 
-            statsManager.increment(channel, artifact.getIdentifier(), version.getIdentifier());
-            statsManager.userAgent(userAgent);
+            statsManager.increment(channel, userAgent, artifact.getIdentifier(), version.getIdentifier());
         } catch (IOException ignored) {}
         return null;
     }
