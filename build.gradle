@@ -1,6 +1,7 @@
 plugins {
     id 'org.springframework.boot' version '2.7.3'
     id 'io.spring.dependency-management' version '1.0.13.RELEASE'
+    id 'org.jetbrains.kotlin.jvm' version '1.7.21'
     id 'java'
 }
 
@@ -11,10 +12,17 @@ group 'dev.vankka'
 version '2'
 
 repositories {
+    maven {
+        name = 'meteor-maven'
+        url = 'https://maven.meteordev.org/releases'
+    }
     mavenCentral()
 }
 
 dependencies {
+    // Starscript (enhanced String.format)
+    implementation 'meteordevelopment:starscript:0.2.2'
+
     // Spring (application framework, web server)
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -54,6 +62,11 @@ dependencies {
 
     // org.json (v1 routes)
     implementation 'org.json:json:20220924'
+}
+
+compileKotlin {
+    kotlinOptions.freeCompilerArgs += "-Xcontext-receivers"
+    kotlinOptions.jvmTarget = "17"
 }
 
 jar {
