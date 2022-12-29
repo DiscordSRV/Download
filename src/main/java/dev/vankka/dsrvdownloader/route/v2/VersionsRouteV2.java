@@ -7,10 +7,7 @@ import dev.vankka.dsrvdownloader.model.channel.VersionChannel;
 import io.swagger.annotations.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import javax.servlet.http.HttpServletRequest;
@@ -29,6 +26,7 @@ public class VersionsRouteV2 {
             path = "/v2/{repoOwner}/{repoName}/{releaseChannel}/versions",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @CrossOrigin
     @ApiOperation(value = "Versions", notes = "Versions")
     @ApiResponses({
             @ApiResponse(code = 200 /* OK */, message = "Success", response = VersionResponse.class),
