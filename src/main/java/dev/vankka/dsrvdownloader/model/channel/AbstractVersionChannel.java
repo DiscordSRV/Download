@@ -18,10 +18,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -199,7 +196,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
                 continue;
             }
 
-            List<VersionResponse.Artifact> artifacts = new ArrayList<>();
+            Map<String, VersionResponse.Artifact> artifacts = new LinkedHashMap<>();
             for (Map.Entry<String, Artifact> artifactEntry : version.getArtifactsByIdentifier().entrySet()) {
                 String artifactIdentifier = artifactEntry.getKey();
                 Artifact artifact = artifactEntry.getValue();
@@ -210,7 +207,7 @@ public abstract class AbstractVersionChannel implements VersionChannel {
                 );
 
                 String url = baseUrl + version.getIdentifier() + "/" + (preferIdentifier ? artifactIdentifier : artifact.getFileName());
-                artifacts.add(new VersionResponse.Artifact(
+                artifacts.put(artifact.getIdentifier(), new VersionResponse.Artifact(
                         artifact.getFileName(),
                         artifact.getSize(),
                         url,
