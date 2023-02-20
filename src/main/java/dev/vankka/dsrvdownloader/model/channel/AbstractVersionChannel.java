@@ -129,6 +129,11 @@ public abstract class AbstractVersionChannel implements VersionChannel {
     }
 
     @Override
+    public Version latestVersion() {
+        return versionsInOrder.isEmpty() ? null : versionsInOrder.get(0);
+    }
+
+    @Override
     public String getUrl(HttpServletRequest request) {
         return UrlUtil.getUrl(request) + "/v2/" + repo() + "/" + config.name();
     }

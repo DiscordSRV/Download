@@ -26,7 +26,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.nio.file.Files;
 import java.time.Duration;
-import java.util.Map;
 import java.util.function.Supplier;
 
 @RestController
@@ -76,20 +75,18 @@ public class DownloadRouteV2 {
         VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
-        Map<String, Version> versions = channel.versionsByIdentifier();
-
         boolean isRedirect = false;
 
         Version version;
         if (identifier.equalsIgnoreCase(VersionChannel.LATEST_IDENTIFIER)) {
-            if (versions.isEmpty()) {
+            version = channel.latestVersion();
+            if (version == null) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No versions available for this channel");
             }
 
-            version = versions.values().iterator().next();
             isRedirect = true;
         } else {
-            version = versions.get(identifier);
+            version = channel.versionsByIdentifier().get(identifier);
         }
         if (version == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Version not found");

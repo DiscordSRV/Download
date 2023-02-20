@@ -18,6 +18,7 @@ public interface VersionChannel {
     void cleanupDirectory(boolean ignoreVersions);
     void refresh();
     Map<String, Version> versionsByIdentifier();
+    Version latestVersion();
     String getUrl(HttpServletRequest request);
     VersionResponse versionResponse(HttpServletRequest request, boolean preferIdentifier);
     VersionCheck checkVersion(String comparedTo);
