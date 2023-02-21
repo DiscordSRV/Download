@@ -1,6 +1,7 @@
 plugins {
     id 'org.springframework.boot' version '2.7.3'
     id 'io.spring.dependency-management' version '1.0.13.RELEASE'
+    id 'net.kyori.indra.git' version '2.1.1'
     id 'java'
 }
 
@@ -67,6 +68,15 @@ jar {
     manifest {
         attributes(
                 'Main-Class': 'dev.vankka.dsrvdownloader.Downloader'
+        )
+    }
+}
+
+tasks.withType(Jar.class) {
+    manifest {
+        var commit = indraGit.isPresent() ? indraGit.commit() : null
+        attributes(
+                'Git-Revision': commit != null ? commit.name() : ''
         )
     }
 }

@@ -5,7 +5,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.net.URL;
 import java.sql.SQLException;
+import java.util.Enumeration;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 
 @RestController
 public class StatsController {
@@ -30,5 +35,19 @@ public class StatsController {
             @RequestParam(name = "limit", defaultValue = "50") int limit
     ) throws SQLException {
         return statsManager.query(group, repoOwner, repoName, channel, artifact, version, useragent, from, to, limit);
+    }
+
+    @GetMapping(path = "/admin/version")
+    public String getVersion() throws IOException {
+        Enumeration<URL> resources = getClass().getClassLoader()
+                .getResources(JarFile.MANIFEST_NAME);
+        while (resources.hasMoreElements()) {
+            Manifest manifest = new Manifest(resources.nextElement().openStream());
+            String gitRevision = manifest.getMainAttributes().getValue("Git-Revision");
+            if (gitRevision != null) {
+                return gitRevision;
+            }
+        }
+        return "unknown";
     }
 }
