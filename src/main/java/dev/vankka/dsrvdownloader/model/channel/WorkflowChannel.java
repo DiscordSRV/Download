@@ -468,14 +468,11 @@ public class WorkflowChannel extends AbstractVersionChannel {
         String id = workflowRun.head_sha();
         Commit headCommit = workflowRun.head_commit();
         String description = headCommit != null ? headCommit.message() : null;
-        if (description != null && description.contains("\n")) {
-            description = description.substring(0, description.indexOf("\n"));
-        }
 
         String action = node.get("action").asText();
         if (!action.equals("completed")) {
             if (action.equals("requested")) {
-                waiting(id, description, "[workflow](" + workflowRun.html_url() + ") to run");
+                waiting(id, description, "[workflow](<" + workflowRun.html_url() + ">) to run");
             }
             return;
         }

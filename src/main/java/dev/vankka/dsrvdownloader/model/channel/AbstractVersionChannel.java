@@ -276,14 +276,21 @@ public abstract class AbstractVersionChannel implements VersionChannel {
         }
     }
 
+    private String formatDescription(String description) {
+        if (description != null && description.contains("\n")) {
+            description = description.substring(0, description.indexOf("\n"));
+        }
+        return description;
+    }
+
     protected void waiting(String identifier, String description, String waitReason) {
         setDiscordMessage(identifier, "\uD83D\uDD51 Waiting for `" + identifier + "` " + waitReason
-                + " (`" + description + "`) [`" + describe() + "`]", null);
+                + " (`" + formatDescription(description) + "`) [`" + describe() + "`]", null);
     }
 
     protected void processing(String identifier, String description) {
         setDiscordMessage(identifier, "\uD83D\uDD01 Processing `" + identifier + "` "
-                + "(`" + description + "`) [`" + describe() + "`]", null);
+                + "(`" + formatDescription(description) + "`) [`" + describe() + "`]", null);
     }
 
     protected void failed(String identifier, String description, String failReason) {
@@ -292,19 +299,19 @@ public abstract class AbstractVersionChannel implements VersionChannel {
 
     protected void failed(String identifier, String description, String failReason, String longerMessage) {
         setLastDiscordMessage(identifier, "❌ Failed to include `" + identifier + "` "
-                + "(`" + description + "`) because: \"" + failReason + "\" [`" + describe() + "`]", longerMessage);
+                + "(`" + formatDescription(description) + "`) because: \"" + failReason + "\" [`" + describe() + "`]", longerMessage);
     }
 
     protected void success(String identifier, String description) {
         setLastDiscordMessage(identifier, "✅ Successfully included `" + identifier + "` "
-                + "(`" + description + "`) [`" + describe() + "`]", null);
+                + "(`" + formatDescription(description) + "`) [`" + describe() + "`]", null);
     }
 
     protected void newVersionAvailable(Version version) {
         discordWebhook.processMessage(new DiscordMessage().setMessage(
                 "\uD83D\uDCE5 New version "
                         + "`" + version.getIdentifier() + "` "
-                        + "(`" + version.getDescription() + "`) is available [`" + describe() + "`]", null));
+                        + "(`" + formatDescription(version.getDescription()) + "`) is available [`" + describe() + "`]", null));
     }
 
     private void setDiscordMessage(String identifier, String message, String longerMessage) {

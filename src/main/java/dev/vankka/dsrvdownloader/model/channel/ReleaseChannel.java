@@ -222,7 +222,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
         }
 
         if (!action.equals("released")) {
-            waiting(release.tag_name(), release.name(), "for [release](" + release.html_url() + ") to publish");
+            waiting(release.tag_name(), release.name(), "for [release](<" + release.html_url() + ">) to publish");
             return;
         }
 
