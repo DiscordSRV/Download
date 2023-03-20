@@ -201,7 +201,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
         return amount == 1 ? "version" : "versions";
     }
 
-    private static final Set<String> ACCEPTABLE_ACTIONS = new HashSet<>(Arrays.asList("created", "released"));
+    private static final Set<String> ACCEPTABLE_ACTIONS = new HashSet<>(Arrays.asList("created", "published"));
     @Override
     public void receiveWebhook(String event, JsonNode node) {
         if (!event.equals("release")) {
@@ -221,7 +221,7 @@ public class ReleaseChannel extends AbstractVersionChannel {
             return;
         }
 
-        if (!action.equals("released")) {
+        if (!action.equals("published")) {
             waiting(release.tag_name(), release.name(), "for [release](<" + release.html_url() + ">) to publish");
             return;
         }
