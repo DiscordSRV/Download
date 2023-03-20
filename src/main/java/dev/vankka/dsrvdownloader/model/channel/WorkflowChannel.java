@@ -478,7 +478,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
         }
 
         if (!workflowRun.conclusion().equals("success")) {
-            failed(id, description, "[workflow](" + workflowRun.html_url() + ") failure");
+            failed(id, description, "[workflow](<" + workflowRun.html_url() + ">) failure");
             return;
         }
 
