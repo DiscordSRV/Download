@@ -17,6 +17,7 @@ import dev.vankka.dsrvdownloader.util.IO;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.apache.commons.io.file.PathUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.lang3.tuple.Triple;
 import org.apache.tomcat.util.buf.HexUtils;
@@ -181,7 +182,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                         }
 
                         if (artifacts.isEmpty()) {
-                            Files.delete(folder);
+                            PathUtils.delete(folder);
                             return;
                         }
 
@@ -254,13 +255,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
             for (Map<String, Triple<String, Path, Path>> value : versions.values()) {
                 for (Triple<String, Path, Path> triple : value.values()) {
                     Path file = triple.getMiddle();
-                    Path metaFile = triple.getRight();
-
-                    Files.delete(file);
-                    Files.delete(metaFile);
-
-                    // folder containing the two files
-                    Files.delete(file.getParent());
+                    PathUtils.delete(file.getParent());
                 }
             }
         } catch (IOException | NoSuchAlgorithmException | DigestException e) {
@@ -280,7 +275,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
 
         WorkflowArtifactPaging artifactPaging = null;
         int attempts = 0;
-        while ((artifactPaging == null || artifactPaging.artifacts().size() == 0) && attempts < ARTIFACT_REATTEMPTS) {
+        while ((artifactPaging == null || artifactPaging.artifacts().isEmpty()) && attempts < ARTIFACT_REATTEMPTS) {
             try (Response response = configManager.httpClient().newCall(request).execute()) {
                 ResponseBody body = response.body();
                 if (!response.isSuccessful() || body == null) {
@@ -297,7 +292,7 @@ public class WorkflowChannel extends AbstractVersionChannel {
                 break;
             }
 
-            if (artifactPaging.artifacts().size() == 0) {
+            if (artifactPaging.artifacts().isEmpty()) {
                 attempts++;
                 Downloader.LOGGER.warn(
                         "Retrying getting artifacts for " + describe() + " run "
