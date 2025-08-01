@@ -46,7 +46,7 @@ public class MetadataRouteV2 {
         VersionChannel channel = channelManager.getChannel(repoOwner, repoName, releaseChannel)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown repository or channel"));
 
-        Map<String, Map<String, Object>> artifactMetadata = new HashMap<>();
+        Map<String, Map<String, Object>> artifactMetadata = new LinkedHashMap<>();
         for (VersionArtifactConfig artifact : channel.getConfig().artifacts()) {
             Map<String, Object> metadata = artifact.metadata();
             if (metadata != null) {
