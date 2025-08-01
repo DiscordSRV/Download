@@ -1,6 +1,7 @@
 package dev.vankka.dsrvdownloader.config;
 
 import java.util.List;
+import java.util.Map;
 
 public record VersionChannelConfig(
         String name,
@@ -15,7 +16,9 @@ public record VersionChannelConfig(
         // Workflows only
         String branch,
         String workflowFile,
-        int pagesOfRunsToKeep
+        int pagesOfRunsToKeep,
+
+        Map<String, Object> metadata
 ) {
     public enum Type {
 

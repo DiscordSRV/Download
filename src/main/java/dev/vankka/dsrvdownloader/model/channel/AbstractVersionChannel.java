@@ -206,7 +206,6 @@ public abstract class AbstractVersionChannel implements VersionChannel {
                 String artifactIdentifier = artifactEntry.getKey();
                 Artifact artifact = artifactEntry.getValue();
 
-
                 VersionResponse.Hashes hashes = new VersionResponse.Hashes(
                         artifact.getSha256()
                 );
