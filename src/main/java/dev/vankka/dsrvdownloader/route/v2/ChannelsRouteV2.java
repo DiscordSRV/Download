@@ -34,7 +34,7 @@ public class ChannelsRouteV2 {
         List<ChannelResponse> channels = new ArrayList<>();
         for (VersionChannel channel : channelManager.versionChannels()) {
             VersionChannelConfig config = channel.getConfig();
-            channels.add(new ChannelResponse(config.repoOwner(), config.repoName(), config.name(), config.metadata()));
+            channels.add(new ChannelResponse(config.repoOwner(), config.repoName(), config.name()));
         }
         return channels;
     }
